@@ -5,7 +5,7 @@
   --text:#e9f1ff;
   --muted:#a9b7cc;
   --line:rgba(255,255,255,.08);
-  --primary:#7c4dff;
+  --primary:#f6c000;
   --primary2:#00e5ff;
   --warn:#ffb020;
   --ok:#51ffb0;
@@ -19,7 +19,7 @@ html,body{height:100%}
 body{
   margin:0;
   font-family:var(--font);
-  background: radial-gradient(1200px 700px at 15% 10%, rgba(124,77,255,.18), transparent 60%),
+  background: radial-gradient(1200px 700px at 15% 10%, rgba(246,192,0,.16), transparent 60%),
               radial-gradient(900px 500px at 85% 15%, rgba(0,229,255,.10), transparent 55%),
               var(--bg);
   color:var(--text);
@@ -38,7 +38,7 @@ body{
 .orb{
   width:28px;height:28px;border-radius:50%;
   background: conic-gradient(from 200deg, var(--primary), var(--primary2), var(--primary));
-  box-shadow: 0 0 0 3px rgba(124,77,255,.20), 0 0 35px rgba(0,229,255,.15);
+  box-shadow: 0 0 0 3px rgba(246,192,0,.22), 0 0 35px rgba(0,229,255,.15);
 }
 .title{font-weight:800;letter-spacing:.2px}
 .subtitle{font-size:12px;color:var(--muted);margin-top:2px}
@@ -112,7 +112,7 @@ body{
 }
 .badge.ok{color:#072016;background:rgba(81,255,176,.16)}
 .badge.warn{color:#2a1b00;background:rgba(255,176,32,.16)}
-.badge.neutral{color:#0d1c2a;background:rgba(124,77,255,.12)}
+.badge.neutral{color:#0d1c2a;background:rgba(246,192,0,.10)}
 .itemTitle{font-weight:800;margin-bottom:4px}
 .itemMeta{font-size:12px;color:var(--muted);line-height:1.3}
 
@@ -128,7 +128,7 @@ body{
 }
 .btn:hover{background: rgba(255,255,255,.09)}
 .btn:active{transform: translateY(1px)}
-.btn.primary{background: rgba(124,77,255,.25); border-color: rgba(124,77,255,.55)}
+.btn.primary{background: rgba(246,192,0,.22); border-color: rgba(246,192,0,.55)}
 .btn.warn{background: rgba(255,176,32,.18); border-color: rgba(255,176,32,.40)}
 .btn.ghost{background: transparent}
 .btn:disabled{opacity:.45;cursor:not-allowed}

@@ -14,6 +14,44 @@ const DEFAULT_SETTINGS = {
 const nowISO = () => new Date().toISOString();
 const todayKey = () => new Date().toISOString().slice(0,10);
 
+// ---- Week helpers (ISO-ish) ----
+function pad2(n){ return String(n).padStart(2,"0"); }
+
+// Returns ISO week id like "2026-W08"
+function weekIdISO(d=new Date()){
+  // Based on ISO week date algorithm
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7; // 1..7 (Mon..Sun)
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  const weekNo = Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+  return `${date.getUTCFullYear()}-W${pad2(weekNo)}`;
+}
+
+function weekStartMonday(d=new Date()){
+  const date = new Date(d);
+  const day = date.getDay(); // 0..6 (Sun..Sat)
+  const diff = (day === 0 ? -6 : 1 - day); // move to Monday
+  date.setDate(date.getDate() + diff);
+  date.setHours(0,0,0,0);
+  return date;
+}
+
+function addDays(date, days){
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function dateKey(d){
+  const x = new Date(d);
+  const yyyy = x.getFullYear();
+  const mm = pad2(x.getMonth()+1);
+  const dd = pad2(x.getDate());
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+
 function uid(prefix="id"){
   return `${prefix}_${crypto.randomUUID?.() || (Date.now()+"_"+Math.random().toString(16).slice(2))}`;
 }
@@ -31,7 +69,8 @@ function loadState(){
     sessions: [],
     clients: [],
     ideas: [],
-    eventQueue: []  // para sync incremental
+    eventQueue: [],  // para sync incremental
+    planWeekId: null
   };
 }
 function saveState(){
@@ -48,6 +87,94 @@ function loadSettings(){
 function saveSettings(){
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS));
 }
+
+// ---------- State normalization + Plan Girasol seeding ----------
+function normalizeState_(st){
+  st = st || {};
+  st.v = st.v || "0.1";
+  st.tasks = Array.isArray(st.tasks) ? st.tasks : [];
+  st.sessions = Array.isArray(st.sessions) ? st.sessions : [];
+  st.clients = Array.isArray(st.clients) ? st.clients : [];
+  st.ideas = Array.isArray(st.ideas) ? st.ideas : [];
+  st.eventQueue = Array.isArray(st.eventQueue) ? st.eventQueue : [];
+  st.planWeekId = st.planWeekId || null;
+
+  // Back-compat: tasks sin category -> mission
+  for(const t of st.tasks){
+    if(!t.category) t.category = "mission"; // mission | plan
+    if(!t.pinnedDay) t.pinnedDay = todayKey();
+  }
+  return st;
+}
+
+function seedPlanGirasolIfNeeded_(){
+  const currentWeek = weekIdISO(new Date());
+  if(STATE.planWeekId === currentWeek) return;
+
+  // Seed una vez por semana: Plan Girasol base
+  const ws = weekStartMonday(new Date());
+  const createdAt = nowISO();
+
+  const daily = [
+    "Historia: 1 story (presencia suave)",
+    "Responder DMs pendientes (5-10 min)",
+    "Engagement: 5 interacciones reales"
+  ];
+
+  const weeklyByDow = {
+    0: ["Post educativo (autoridad)"],      // Monday
+    2: ["Post emocional/relatable (conexión)"], // Wednesday
+    4: ["CTA directo: agenda/servicio (conversión)"] // Friday
+  };
+
+  const extrasByDow = {
+    6: ["Revisión semanal: ordenar leads + próximos pasos"] // Sunday
+  };
+
+  const newTasks = [];
+  for(let i=0;i<7;i++){
+    const d = addDays(ws, i);
+    const dayKey = dateKey(d);
+    // diarios
+    for(const title of daily){
+      newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
+    }
+    // semanales por día
+    const dow = i; // 0..6 Mon..Sun
+    const w = weeklyByDow[dow] || [];
+    for(const title of w){
+      newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
+    }
+    const ex = extrasByDow[dow] || [];
+    for(const title of ex){
+      newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
+    }
+  }
+
+  // Insertamos al inicio (para que aparezcan arriba por día)
+  STATE.tasks = [...newTasks.reverse(), ...STATE.tasks];
+
+  // Registrar eventos para sync (solo si sync está habilitado o si quieres data completa)
+  for(const t of newTasks){
+    enqueueEvent("task_add", t);
+  }
+
+  STATE.planWeekId = currentWeek;
+  saveState();
+}
+
+function makeTask_(title, opts={}){
+  return {
+    id: uid("task"),
+    title: String(title || "").trim(),
+    createdAt: opts.createdAt || nowISO(),
+    doneAt: opts.doneAt || null,
+    pinnedDay: opts.pinnedDay || todayKey(),
+    notes: opts.notes || "",
+    category: opts.category || "mission" // mission | plan
+  };
+}
+
 
 // ---------- Event queue (para sync) ----------
 function enqueueEvent(type, payload){
@@ -75,15 +202,14 @@ function markEventsSynced(eventIds){
 }
 
 // ---------- Simple domain actions ----------
-function addTask(title){
-  const t = {
-    id: uid("task"),
-    title: title.trim(),
-    createdAt: nowISO(),
-    doneAt: null,
-    pinnedDay: todayKey(), // por ahora, misiones del día
-    notes: ""
-  };
+function addTask(title, opts={}){
+  const t = makeTask_(title, {
+    pinnedDay: opts.pinnedDay || todayKey(),
+    category: opts.category || "mission",
+    notes: opts.notes || "",
+    createdAt: opts.createdAt || nowISO()
+  });
+
   STATE.tasks.unshift(t);
   enqueueEvent("task_add", t);
   saveState();
@@ -263,7 +389,7 @@ async function syncNow(){
 
 
 // ---------- UI ----------
-let STATE = loadState();
+let STATE = normalizeState_(loadState());
 let SETTINGS = loadSettings();
 
 function $(sel){ return document.querySelector(sel); }
@@ -276,6 +402,10 @@ function formatMin(sec){
   const mm = m%60;
   return `${h}h ${mm}m`;
 }
+
+function escapeAttr(s){ return escapeHtml(s).replace(/\n/g," "); }
+
+
 function formatTimer(sec){
   const mm = String(Math.floor(sec/60)).padStart(2,"0");
   const ss = String(sec%60).padStart(2,"0");
@@ -294,6 +424,8 @@ function badgeForStatus(status){
 }
 
 function render(){
+  renderPlanDaySelect();
+  renderPlan();
   renderTasks();
   renderSessionTaskSelect();
   renderSessions();
@@ -301,6 +433,66 @@ function render(){
   renderIdeas();
   renderMetrics();
   updateSyncUI();
+}
+
+function renderPlanDaySelect(){
+  const sel = $("#planDaySelect");
+  if(!sel) return;
+  const ws = weekStartMonday(new Date());
+  const today = todayKey();
+
+  const opts = [];
+  for(let i=0;i<7;i++){
+    const d = addDays(ws, i);
+    const key = dateKey(d);
+    const label = d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
+    const selected = (key === (sel.value || today)) ? "selected" : "";
+    opts.push(`<option value="${key}" ${selected}>${label}</option>`);
+  }
+  // If current value not in this week, default to today
+  sel.innerHTML = opts.join("");
+  if(!sel.value) sel.value = today;
+}
+
+function renderPlan(){
+  const list = $("#planList");
+  const sel = $("#planDaySelect");
+  if(!list || !sel) return;
+
+  const dayKey = sel.value || todayKey();
+  const items = STATE.tasks.filter(t => t.pinnedDay === dayKey && (t.category === "plan"));
+
+  if(!items.length){
+    list.innerHTML = `<div class="item">
+      <div class="itemLeft">
+        <div>
+          <div class="itemTitle">Sin tareas del plan para este día</div>
+          <div class="itemMeta">Puedes agregar una tarea 🌻 si hace falta (sin presión).</div>
+        </div>
+      </div>
+      <div><span class="pill">Plan Girasol</span></div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = items.map(t => {
+    const done = !!t.doneAt;
+    return `<div class="item">
+      <div class="itemLeft">
+        <button class="btn ${done ? "primary":""}" data-act="planToggle" data-id="${t.id}" title="Marcar hecho">
+          ${done ? "✓":"○"}
+        </button>
+        <div>
+          <div class="itemTitle">${escapeHtml(t.title)}</div>
+          <div class="itemMeta">${done ? "Hecho ✅" : "Por hacer"} • ${t.pinnedDay}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn ghost" data-act="planEdit" data-id="${t.id}" title="Editar">✎</button>
+        <button class="btn ghost" data-act="planDelete" data-id="${t.id}" title="Eliminar">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
 }
 
 function renderMetrics(){
@@ -318,9 +510,11 @@ function renderMetrics(){
 function renderTasks(){
   const day = todayKey();
   const list = $("#tasksList");
-  const tasksToday = STATE.tasks.filter(t => t.pinnedDay === day).slice(0,3);
+  const missionsToday = STATE.tasks
+    .filter(t => t.pinnedDay === day && (t.category || "mission") !== "plan")
+    .slice(0,3);
 
-  if(!tasksToday.length){
+  if(!missionsToday.length){
     list.innerHTML = `<div class="item"><div class="itemLeft">
       <div>
         <div class="itemTitle">Sin misiones todavía</div>
@@ -331,7 +525,7 @@ function renderTasks(){
     return;
   }
 
-  list.innerHTML = tasksToday.map(t => {
+  list.innerHTML = missionsToday.map(t => {
     const done = !!t.doneAt;
     return `<div class="item">
       <div class="itemLeft">
@@ -353,10 +547,13 @@ function renderTasks(){
 function renderSessionTaskSelect(){
   const sel = $("#sessionTaskSelect");
   const day = todayKey();
-  const tasksToday = STATE.tasks.filter(t => t.pinnedDay === day).slice(0,3);
+  const tasksToday = STATE.tasks.filter(t => t.pinnedDay === day).slice(0,10);
   const options = [
     `<option value="">(sin tarea)</option>`,
-    ...tasksToday.map(t => `<option value="${t.id}">${escapeHtml(t.title)}</option>`)
+    ...tasksToday.map(t => {
+      const tag = (t.category === "plan") ? " 🌻" : "";
+      return `<option value="${t.id}">${escapeHtml(t.title)}${tag}</option>`;
+    })
   ];
   sel.innerHTML = options.join("");
 }
@@ -531,37 +728,73 @@ function toast(msg){
   el.style.zIndex = "99";
   el.style.maxWidth = "min(640px, 92vw)";
   document.body.appendChild(el);
-  setTimeout(()=> el.remove(), 1800);
-}
-
-// ---------- Event wiring ----------
-function wire(){
+  setTimefunction wire(){
   $("#btnAddTask").addEventListener("click", () => {
+    openTaskModal_({ category: "mission", pinnedDay: todayKey() });
+  });
+
+  $("#btnAddPlanTask").addEventListener("click", () => {
+    const day = $("#planDaySelect")?.value || todayKey();
+    openTaskModal_({ category: "plan", pinnedDay: day });
+  });
+
+  $("#planDaySelect").addEventListener("change", () => {
+    renderPlan();
+  });
+
+  function openTaskModal_(defaults){
+    const defCat = defaults?.category || "mission";
+    const defDay = defaults?.pinnedDay || todayKey();
+    const isPlan = defCat === "plan";
+
     openModal(
-      "Agregar misión del día",
+      isPlan ? "Agregar tarea al Plan Girasol" : "Agregar misión del día",
       `
         <div class="row">
           <label class="label">Título</label>
-          <input id="mTaskTitle" class="input" placeholder="Ej: 10 min de investigación para un post (Luna en Piscis)" />
-          <div style="margin-top:8px" class="label">Tip: si está pesado, ponlo en versión micro (5-10 min).</div>
+          <input id="mTaskTitle" class="input" placeholder="Ej: 10 min de investigación (Luna en Piscis)" />
         </div>
+
+        <div class="row">
+          <label class="label">Fecha</label>
+          <input id="mTaskDay" type="date" class="input" value="${defDay}" />
+          <div class="itemMeta">Puedes planear para otro día sin cargar el “hoy”.</div>
+        </div>
+
+        <div class="row">
+          <label class="label">Tipo</label>
+          <select id="mTaskCat" class="input">
+            <option value="mission" ${defCat==="mission" ? "selected":""}>Misión (máx 3 hoy)</option>
+            <option value="plan" ${defCat==="plan" ? "selected":""}>Plan Girasol 🌻</option>
+          </select>
+        </div>
+
+        <div class="divider"></div>
+        <div class="itemMeta">Tip: si está pesado, hazlo micro (5-10 min). Esto es estructura suave.</div>
       `,
       `
         <button class="btn" id="mCancel">Cancelar</button>
         <button class="btn primary" id="mOk">Agregar</button>
       `
     );
+
     $("#mCancel").onclick = closeModal;
     $("#mOk").onclick = () => {
       const title = $("#mTaskTitle").value.trim();
-      const day = todayKey();
-      const count = STATE.tasks.filter(t => t.pinnedDay===day).slice(0,3).length;
+      const day = $("#mTaskDay").value || todayKey();
+      const cat = $("#mTaskCat").value || "mission";
+
       if(!title){ toast("Escribe un título."); return; }
-      if(count >= 3){ toast("Máximo 3 misiones para hoy."); return; }
-      addTask(title);
+
+      if(cat === "mission" && day === todayKey()){
+        const count = STATE.tasks.filter(t => t.pinnedDay===day && (t.category||"mission")!=="plan").slice(0,3).length;
+        if(count >= 3){ toast("Máximo 3 misiones para hoy."); return; }
+      }
+
+      addTask(title, { pinnedDay: day, category: cat });
       closeModal();
     };
-  });
+  }
 
   $("#btnStartSession").addEventListener("click", () => {
     const taskId = $("#sessionTaskSelect").value || null;
@@ -657,6 +890,52 @@ function wire(){
     if(act==="taskDelete") deleteTask(id);
   });
 
+  $("#planList").addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if(!btn) return;
+    const act = btn.dataset.act;
+    const id = btn.dataset.id;
+
+    if(act==="planToggle") toggleTaskDone(id);
+    if(act==="planDelete") deleteTask(id);
+
+    if(act==="planEdit"){
+      const t = STATE.tasks.find(x => x.id===id);
+      if(!t) return;
+      openModal(
+        "Editar tarea",
+        `
+          <div class="row">
+            <label class="label">Título</label>
+            <input id="mEditTitle" class="input" value="${escapeAttr(t.title)}" />
+          </div>
+          <div class="row">
+            <label class="label">Fecha</label>
+            <input id="mEditDay" type="date" class="input" value="${t.pinnedDay}" />
+          </div>
+        `,
+        `
+          <button class="btn" id="mCancel">Cancelar</button>
+          <button class="btn primary" id="mSave">Guardar</button>
+        `
+      );
+      $("#mCancel").onclick = closeModal;
+      $("#mSave").onclick = () => {
+        const title = $("#mEditTitle").value.trim();
+        const day = $("#mEditDay").value || t.pinnedDay;
+        if(!title){ toast("Título vacío."); return; }
+        t.title = title;
+        t.pinnedDay = day;
+        enqueueEvent("task_update", { id: t.id, patch: { title, pinnedDay: day, category: t.category || "plan" } });
+        saveState();
+        renderPlanDaySelect();
+        render();
+        closeModal();
+      };
+    }
+  });
+
+
   $("#clientFilter").addEventListener("change", renderClients);
   $("#clientSearch").addEventListener("input", renderClients);
 
@@ -681,6 +960,10 @@ function wire(){
     // Best effort: registrar evento de salida
     if(ACTIVE_SESSION){
       enqueueEvent("app_unload_during_session", { sessionId: ACTIVE_SESSION.id, taskTitle: ACTIVE_SESSION.taskTitle });
+      saveState();
+    }
+  });
+askTitle: ACTIVE_SESSION.taskTitle });
       saveState();
     }
   });
@@ -887,5 +1170,6 @@ if("serviceWorker" in navigator){
   });
 }
 
+seedPlanGirasolIfNeeded_();
 wire();
 render();

@@ -1,5 +1,5 @@
 // Simple cache-first service worker for GitHub Pages
-const CACHE = "fa-v01-cache-2";
+const CACHE = "fa-v01-cache-3";
 const ASSETS = [
   "./",
   "./index.html",
