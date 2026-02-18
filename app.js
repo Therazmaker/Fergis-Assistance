@@ -728,7 +728,10 @@ function toast(msg){
   el.style.zIndex = "99";
   el.style.maxWidth = "min(640px, 92vw)";
   document.body.appendChild(el);
-  setTimefunction wire(){
+  setTimeout(()=> el.remove(), 1800);
+}
+
+function wire(){
   $("#btnAddTask").addEventListener("click", () => {
     openTaskModal_({ category: "mission", pinnedDay: todayKey() });
   });
@@ -960,10 +963,6 @@ function toast(msg){
     // Best effort: registrar evento de salida
     if(ACTIVE_SESSION){
       enqueueEvent("app_unload_during_session", { sessionId: ACTIVE_SESSION.id, taskTitle: ACTIVE_SESSION.taskTitle });
-      saveState();
-    }
-  });
-askTitle: ACTIVE_SESSION.taskTitle });
       saveState();
     }
   });
