@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="theme-color" content="#0b0f14" />
+  <title>Fergis Assistant</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" href="./assets/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div id="app" class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="orb"></div>
+        <div class="brandText">
+          <div class="title">Fergis Assistant</div>
+          <div class="subtitle" id="subtitle">Local-first • Sync a Sheets (cuando lo activemos)</div>
+        </div>
+      </div>
+      <div class="topActions">
+        <button class="btn ghost" id="btnSync" title="Sincronizar">↻ Sync</button>
+        <button class="btn ghost" id="btnSettings" title="Ajustes">⚙</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <section class="card heroCard">
+        <div class="heroLeft">
+          <div class="heroKicker">HOY</div>
+          <h1 class="heroTitle">Estructura suave, sin culpa.</h1>
+          <div class="heroText">
+            Aquí solo sumas pasos pequeños. Si te pausan los síntomas, lo registramos como dato, no como fallo.
+          </div>
+        </div>
+        <div class="heroRight">
+          <div class="metric">
+            <div class="metricLabel">Tiempo activo hoy</div>
+            <div class="metricValue" id="mActiveToday">0m</div>
+          </div>
+          <div class="metric">
+            <div class="metricLabel">Sesiones hoy</div>
+            <div class="metricValue" id="mSessionsToday">0</div>
+          </div>
+          <div class="metric">
+            <div class="metricLabel">Pendientes</div>
+            <div class="metricValue" id="mPendingTasks">0</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Misiones del día (máx. 3)</div>
+              <div class="cardSub">Que hacer hoy, pequeño y realista.</div>
+            </div>
+            <button class="btn" id="btnAddTask">+ Agregar</button>
+          </div>
+          <div id="tasksList" class="list"></div>
+        </section>
+
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Sesión (timer)</div>
+              <div class="cardSub">Inicia una tarea y mide tiempo. Si te pausan, lo guardamos.</div>
+            </div>
+          </div>
+
+          <div class="sessionBox">
+            <div class="row">
+              <label class="label">Tarea</label>
+              <select id="sessionTaskSelect" class="input"></select>
+            </div>
+
+            <div class="timer">
+              <div class="timerValue" id="timerValue">00:00</div>
+              <div class="timerHint" id="timerHint">Lista para empezar.</div>
+            </div>
+
+            <div class="actionsRow">
+              <button class="btn primary" id="btnStartSession">▶ Iniciar</button>
+              <button class="btn" id="btnFinishSession" disabled>✓ Terminé</button>
+              <button class="btn warn" id="btnPauseSession" disabled>⏸ Me pauso</button>
+            </div>
+
+            <div class="row">
+              <label class="label">Nota rápida</label>
+              <input id="sessionNote" class="input" placeholder="Ej: hoy me costó arrancar, pero avancé 5 min…" />
+            </div>
+          </div>
+
+          <div class="divider"></div>
+
+          <div class="cardHead compact">
+            <div>
+              <div class="cardTitle">Últimas sesiones</div>
+              <div class="cardSub">Solo informativo.</div>
+            </div>
+          </div>
+          <div id="sessionsList" class="list compactList"></div>
+        </section>
+
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Clientes</div>
+              <div class="cardSub">Seguimiento simple: estado + próximo paso.</div>
+            </div>
+            <button class="btn" id="btnAddClient">+ Cliente</button>
+          </div>
+          <div class="filters">
+            <select id="clientFilter" class="input small">
+              <option value="all">Todos</option>
+              <option value="lead">Lead</option>
+              <option value="chat">Conversando</option>
+              <option value="booked">Agendado</option>
+              <option value="paid">Pagó</option>
+              <option value="delivered">Entregado</option>
+              <option value="followup">Seguimiento</option>
+            </select>
+            <input id="clientSearch" class="input small" placeholder="Buscar…" />
+          </div>
+          <div id="clientsList" class="list"></div>
+        </section>
+
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Ideas / Investigación</div>
+              <div class="cardSub">Captura rápido. Después lo conviertes en post/historia.</div>
+            </div>
+            <button class="btn" id="btnAddIdea">+ Idea</button>
+          </div>
+          <div id="ideasList" class="list"></div>
+        </section>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="footLeft">v0.1 • Local-first</div>
+      <div class="footRight" id="syncStatus">Sync: desactivado</div>
+    </footer>
+  </div>
+
+  <!-- Modal -->
+  <div id="modalOverlay" class="overlay hidden">
+    <div class="modal">
+      <div class="modalHead">
+        <div class="modalTitle" id="modalTitle">Modal</div>
+        <button class="btn ghost" id="modalClose">✕</button>
+      </div>
+      <div class="modalBody" id="modalBody"></div>
+      <div class="modalFoot" id="modalFoot"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
