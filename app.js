@@ -217,8 +217,8 @@ function deleteIdea(id){
 
 // ---------- Sync ----------
 async function syncNow(){
-  const statusEl = $("#syncStatus");
-  const btn = $("#btnSync");
+  const statusEl = document.querySelector("#syncStatus");
+  const btn = document.querySelector("#btnSync");
 
   if(!SETTINGS.syncEnabled || !SETTINGS.appsScriptUrl){
     statusEl.textContent = "Sync: desactivado";
@@ -237,10 +237,10 @@ async function syncNow(){
   statusEl.textContent = `Sync: enviando ${pending.length}…`;
 
   try{
-    const res = await fetch(SETTINGS.appsScriptUrl, {
+    await fetch(SETTINGS.appsScriptUrl, {
       method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({
+      mode: "no-cors",             // ✅ evita CORS
+      body: JSON.stringify({       // ✅ sin headers = no preflight
         app: "FergisAssistant",
         v: "0.1",
         apiKey: SETTINGS.apiKey || "",
@@ -248,23 +248,19 @@ async function syncNow(){
         events: pending
       })
     });
-    const data = await res.json().catch(() => ({}));
-    if(!res.ok || !data.ok){
-      throw new Error(data.error || ("HTTP " + res.status));
-    }
-    const ackIds = Array.isArray(data.acked) ? data.acked : pending.map(e=>e.id);
-    markEventsSynced(ackIds);
-    statusEl.textContent = "Sync: ok ✅";
-    toast("Sincronizado.");
+
+    // OJO: con no-cors no podemos leer respuesta (opaque)
+    statusEl.textContent = "Sync: enviado ✅ (verificar en Sheet)";
+    toast("Enviado. Revisa 'Sync_Audit' y 'Events_Raw'.");
   }catch(err){
     console.warn("Sync error", err);
     statusEl.textContent = "Sync: error ⚠";
-    toast("Error de sync. Revisa Ajustes / URL.");
+    toast("Falló el envío (red). Reintenta.");
   }finally{
     btn.disabled = false;
-    renderMetrics();
   }
 }
+
 
 // ---------- UI ----------
 let STATE = loadState();
