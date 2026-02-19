@@ -150,6 +150,22 @@ body{
 .filters .input.small{flex:1}
 .filters select.input.small{flex:0 0 160px}
 
+.calHeadActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:10px}
+.calDow{font-size:12px;opacity:.7;text-align:center;padding:6px 0}
+.calCell{border:1px solid rgba(255,255,255,.10);border-radius:14px;min-height:78px;padding:10px;position:relative;cursor:pointer;background:rgba(255,255,255,.02)}
+.calCell:hover{background:rgba(255,255,255,.04)}
+.calCell.muted{opacity:.45}
+.calNum{font-weight:700;font-size:12px;opacity:.9}
+.calMeta{margin-top:8px;font-size:12px;opacity:.8;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.dot{width:8px;height:8px;border-radius:999px;background:rgba(255,214,102,.9);display:inline-block}
+.dot.alt{background:rgba(124,255,178,.9)}
+.dot.neutral{background:rgba(163,198,255,.9)}
+.calToday{outline:2px solid rgba(124,255,178,.35)}
+
+.remDone{opacity:.55;text-decoration:line-through}
+
 .sessionBox{display:flex;flex-direction:column;gap:8px}
 .timer{
   margin-top:8px;

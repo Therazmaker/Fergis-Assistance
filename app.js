@@ -51,6 +51,35 @@ function dateKey(d){
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// ---- Month helpers ----
+function monthKey(d=new Date()){
+  const x = new Date(d);
+  return `${x.getFullYear()}-${pad2(x.getMonth()+1)}`;
+}
+function startOfMonth(ym){
+  const [y,m] = (ym||monthKey()).split("-").map(Number);
+  return new Date(y, (m-1), 1, 0,0,0,0);
+}
+function endOfMonth(ym){
+  const s = startOfMonth(ym);
+  return new Date(s.getFullYear(), s.getMonth()+1, 0, 23,59,59,999);
+}
+function toInputDateTimeLocal(iso){
+  const d = new Date(iso);
+  const yyyy = d.getFullYear();
+  const mm = pad2(d.getMonth()+1);
+  const dd = pad2(d.getDate());
+  const hh = pad2(d.getHours());
+  const mi = pad2(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+function parseInputDateTimeLocal(val){
+  // val: "YYYY-MM-DDTHH:MM" en zona local
+  const d = new Date(val);
+  if(Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
 
 function uid(prefix="id"){
   return `${prefix}_${crypto.randomUUID?.() || (Date.now()+"_"+Math.random().toString(16).slice(2))}`;
@@ -67,10 +96,13 @@ function loadState(){
     createdAt: nowISO(),
     tasks: [],
     sessions: [],
+    bookings: [],
+    reminders: [],
     clients: [],
     ideas: [],
     eventQueue: [],  // para sync incremental
-    planWeekId: null
+    planWeekId: null,
+    calMonth: null
   };
 }
 function saveState(){
@@ -94,15 +126,34 @@ function normalizeState_(st){
   st.v = st.v || "0.1";
   st.tasks = Array.isArray(st.tasks) ? st.tasks : [];
   st.sessions = Array.isArray(st.sessions) ? st.sessions : [];
+  st.bookings = Array.isArray(st.bookings) ? st.bookings : [];
+  st.reminders = Array.isArray(st.reminders) ? st.reminders : [];
   st.clients = Array.isArray(st.clients) ? st.clients : [];
   st.ideas = Array.isArray(st.ideas) ? st.ideas : [];
   st.eventQueue = Array.isArray(st.eventQueue) ? st.eventQueue : [];
   st.planWeekId = st.planWeekId || null;
+  st.calMonth = st.calMonth || null;
 
   // Back-compat: tasks sin category -> mission
   for(const t of st.tasks){
     if(!t.category) t.category = "mission"; // mission | plan
     if(!t.pinnedDay) t.pinnedDay = todayKey();
+  }
+
+  // Back-compat: bookings + reminders
+  for(const b of st.bookings){
+    if(!b.type) b.type = "tarot";
+    if(!b.status) b.status = "scheduled";
+    if(!b.startAt) b.startAt = nowISO();
+    if(!b.durationMin) b.durationMin = 60;
+    if(typeof b.amount !== "number") b.amount = Number(b.amount || 0) || 0;
+    if(!b.recurrence) b.recurrence = null;
+  }
+  for(const r of st.reminders){
+    if(!r.text) r.text = "";
+    if(!r.createdAt) r.createdAt = nowISO();
+    if(!r.doneAt) r.doneAt = null;
+    if(!r.dueAt) r.dueAt = null;
   }
   return st;
 }
@@ -115,20 +166,21 @@ function seedPlanGirasolIfNeeded_(){
   const ws = weekStartMonday(new Date());
   const createdAt = nowISO();
 
+  // Nuevo plan (editable) basado en el update solicitado
   const daily = [
-    "Historia: 1 story (presencia suave)",
-    "Responder DMs pendientes (5-10 min)",
-    "Engagement: 5 interacciones reales"
+    "Subir storie (servicios o pregunta: ‘Si pudieras hacerle una pregunta al tarot, ¿cuál sería?’)",
+    "Actualizarme: ir a Lupita / perfiles de astrólogas (tendencias + ideas)",
+    "Buscar gente en comentarios o DMs (leads)",
+    "Escribir y hacer seguimiento (oferta / mensajito / check-in)",
+    "Subir post (si hoy toca: educativo, emocional o CTA)"
   ];
 
-  const weeklyByDow = {
-    0: ["Post educativo (autoridad)"],      // Monday
-    2: ["Post emocional/relatable (conexión)"], // Wednesday
-    4: ["CTA directo: agenda/servicio (conversión)"] // Friday
-  };
-
-  const extrasByDow = {
-    6: ["Revisión semanal: ordenar leads + próximos pasos"] // Sunday
+  // Un toque de estructura sin imponer: sugerencias por día (igual es editable)
+  const weeklyNudgesByDow = {
+    0: ["Sugerencia: Post educativo (autoridad)"],
+    2: ["Sugerencia: Post relatable/emocional (conexión)"],
+    4: ["Sugerencia: CTA directo (agenda / servicio)"],
+    6: ["Revisión semanal: ordenar leads + próximos pasos"]
   };
 
   const newTasks = [];
@@ -139,14 +191,10 @@ function seedPlanGirasolIfNeeded_(){
     for(const title of daily){
       newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
     }
-    // semanales por día
+    // empujoncitos por día
     const dow = i; // 0..6 Mon..Sun
-    const w = weeklyByDow[dow] || [];
-    for(const title of w){
-      newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
-    }
-    const ex = extrasByDow[dow] || [];
-    for(const title of ex){
+    const n = weeklyNudgesByDow[dow] || [];
+    for(const title of n){
       newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
     }
   }
@@ -161,6 +209,89 @@ function seedPlanGirasolIfNeeded_(){
 
   STATE.planWeekId = currentWeek;
   saveState();
+}
+
+// ---------- Bookings (sesiones programadas) ----------
+function makeBooking_(obj={}){
+  return {
+    id: uid("book"),
+    type: obj.type || "tarot", // tarot | astrologia | suscripcion
+    title: (obj.title || "").trim() || null,
+    client: (obj.client || "").trim(),
+    startAt: obj.startAt || nowISO(), // ISO
+    durationMin: Math.max(15, Number(obj.durationMin || 60) || 60),
+    amount: Number(obj.amount || 0) || 0,
+    status: obj.status || "scheduled", // scheduled | done | cancelled
+    notes: (obj.notes || "").trim(),
+    recurrence: obj.recurrence || null, // { freq:"weekly", interval:1, until:"YYYY-MM-DD" }
+    createdAt: nowISO()
+  };
+}
+
+function addBooking(obj){
+  const b = makeBooking_(obj);
+  STATE.bookings.unshift(b);
+  enqueueEvent("booking_add", b);
+  saveState();
+  renderCalendar();
+  renderBookings();
+}
+
+function updateBooking(id, patch){
+  const b = STATE.bookings.find(x => x.id === id);
+  if(!b) return;
+  Object.assign(b, patch);
+  enqueueEvent("booking_update", { id, patch });
+  saveState();
+  renderCalendar();
+  renderBookings();
+}
+
+function deleteBooking(id){
+  STATE.bookings = STATE.bookings.filter(x => x.id !== id);
+  enqueueEvent("booking_delete", { id });
+  saveState();
+  renderCalendar();
+  renderBookings();
+}
+
+// ---------- Reminders ----------
+function makeReminder_(obj={}){
+  return {
+    id: uid("rem"),
+    text: (obj.text || "").trim(),
+    dueAt: obj.dueAt || null, // ISO o null
+    doneAt: obj.doneAt || null,
+    createdAt: nowISO()
+  };
+}
+
+function addReminder(obj){
+  const r = makeReminder_(obj);
+  if(!r.text){ toast("Escribe el recordatorio."); return; }
+  STATE.reminders.unshift(r);
+  enqueueEvent("reminder_add", r);
+  saveState();
+  renderReminders();
+  renderMetrics();
+}
+
+function toggleReminderDone(id){
+  const r = STATE.reminders.find(x => x.id === id);
+  if(!r) return;
+  r.doneAt = r.doneAt ? null : nowISO();
+  enqueueEvent("reminder_toggle_done", { id, doneAt: r.doneAt });
+  saveState();
+  renderReminders();
+  renderMetrics();
+}
+
+function deleteReminder(id){
+  STATE.reminders = STATE.reminders.filter(x => x.id !== id);
+  enqueueEvent("reminder_delete", { id });
+  saveState();
+  renderReminders();
+  renderMetrics();
 }
 
 function makeTask_(title, opts={}){
@@ -429,6 +560,9 @@ function render(){
   renderTasks();
   renderSessionTaskSelect();
   renderSessions();
+  renderCalendar();
+  renderBookings();
+  renderReminders();
   renderClients();
   renderIdeas();
   renderMetrics();
@@ -502,9 +636,10 @@ function renderMetrics(){
   $("#mActiveToday").textContent = totalSec ? formatMin(totalSec) : "0m";
   $("#mSessionsToday").textContent = String(sessionsToday.length);
 
-  const tasksToday = STATE.tasks.filter(t => t.pinnedDay === day).slice(0,3);
-  const pending = tasksToday.filter(t => !t.doneAt).length;
-  $("#mPendingTasks").textContent = String(pending);
+  const tasksToday = STATE.tasks.filter(t => t.pinnedDay === day && (t.category||"mission")!=="plan").slice(0,3);
+  const pendingTasks = tasksToday.filter(t => !t.doneAt).length;
+  const pendingRem = STATE.reminders.filter(r => !r.doneAt).length;
+  $("#mPendingTasks").textContent = String(pendingTasks + pendingRem);
 }
 
 function renderTasks(){
@@ -669,6 +804,204 @@ function renderIdeas(){
   }).join("");
 }
 
+// ---------- Calendar + bookings ----------
+function bookingTypeLabel(type){
+  const map = { tarot:["Tarot","neutral"], astrologia:["Astrología","ok"], suscripcion:["Suscripción","warn"] };
+  return map[type] || [type,"neutral"];
+}
+
+function bookingDotClass(type){
+  if(type === "tarot") return "neutral";
+  if(type === "astrologia") return "alt";
+  if(type === "suscripcion") return "";
+  return "neutral";
+}
+
+function occurrencesInRange(rangeStart, rangeEnd){
+  // Genera ocurrencias (incluye repetición semanal)
+  const out = [];
+  const rs = new Date(rangeStart).getTime();
+  const re = new Date(rangeEnd).getTime();
+
+  for(const b of STATE.bookings){
+    const baseStart = new Date(b.startAt);
+    const baseMs = baseStart.getTime();
+    if(Number.isNaN(baseMs)) continue;
+
+    // Sin repetición
+    if(!b.recurrence){
+      if(baseMs >= rs && baseMs <= re) out.push({ bookingId: b.id, startAt: b.startAt });
+      continue;
+    }
+
+    const freq = b.recurrence.freq || "weekly";
+    const interval = Math.max(1, Number(b.recurrence.interval || 1) || 1);
+    const untilKey = b.recurrence.until || null; // YYYY-MM-DD
+    const untilMs = untilKey ? new Date(untilKey + "T23:59:59").getTime() : null;
+
+    if(freq !== "weekly"){
+      // Por ahora solo weekly
+      if(baseMs >= rs && baseMs <= re) out.push({ bookingId: b.id, startAt: b.startAt });
+      continue;
+    }
+
+    // Empieza desde el primer evento que cae dentro del rango
+    let k = 0;
+    // Evitar loops locos: límite razonable
+    while(k < 520){
+      const occMs = baseMs + (k * interval * 7 * 86400000);
+      if(untilMs && occMs > untilMs) break;
+      if(occMs > re) break;
+      if(occMs >= rs) out.push({ bookingId: b.id, startAt: new Date(occMs).toISOString() });
+      k++;
+    }
+  }
+  return out;
+}
+
+function renderCalendar(){
+  const cal = $("#calendar");
+  const lbl = $("#calMonthLabel");
+  if(!cal || !lbl) return;
+
+  if(!STATE.calMonth) STATE.calMonth = monthKey(new Date());
+
+  const first = startOfMonth(STATE.calMonth);
+  const last = endOfMonth(STATE.calMonth);
+  const monthLabel = first.toLocaleDateString(undefined, { month:"long", year:"numeric" });
+  lbl.textContent = monthLabel;
+
+  // Monday-first calendar
+  const dowMonFirst = (d)=> (d.getDay()===0 ? 6 : d.getDay()-1);
+  const offset = dowMonFirst(first);
+  const gridStart = addDays(first, -offset);
+
+  const occ = occurrencesInRange(gridStart.toISOString(), addDays(last, 14).toISOString());
+  const byDay = new Map();
+  for(const o of occ){
+    const k = dateKey(o.startAt);
+    if(!byDay.has(k)) byDay.set(k, []);
+    byDay.get(k).push(o);
+  }
+
+  const dows = ["Lun","Mar","Mié","Jue","Vie","Sáb","Dom"].map(x=>`<div class="calDow">${x}</div>`).join("");
+
+  const cells = [];
+  const today = todayKey();
+  for(let i=0;i<42;i++){
+    const d = addDays(gridStart, i);
+    const k = dateKey(d);
+    const inMonth = d.getMonth() === first.getMonth();
+    const items = byDay.get(k) || [];
+    const dots = items.slice(0,3).map(o => {
+      const b = STATE.bookings.find(x=>x.id===o.bookingId);
+      const cls = bookingDotClass(b?.type);
+      return `<span class="dot ${cls}"></span>`;
+    }).join("");
+    const more = items.length > 3 ? `<span class="pill">+${items.length-3}</span>` : "";
+    const cls = ["calCell", inMonth?"":"muted", (k===today)?"calToday":""].join(" ").trim();
+    cells.push(`<div class="${cls}" data-act="calDay" data-day="${k}">
+      <div class="calNum">${d.getDate()}</div>
+      <div class="calMeta">${dots}${more}</div>
+    </div>`);
+  }
+  cal.innerHTML = dows + cells.join("");
+}
+
+function renderBookings(){
+  const list = $("#bookingsList");
+  if(!list) return;
+
+  const now = Date.now();
+  const rangeEnd = Date.now() + (60*86400000);
+  const occ = occurrencesInRange(new Date(now - (86400000)).toISOString(), new Date(rangeEnd).toISOString())
+    .map(o => {
+      const b = STATE.bookings.find(x=>x.id===o.bookingId);
+      return { o, b };
+    })
+    .filter(x => x.b)
+    .sort((a,b)=> new Date(a.o.startAt) - new Date(b.o.startAt));
+
+  if(!occ.length){
+    list.innerHTML = `<div class="item">
+      <div class="itemLeft"><div>
+        <div class="itemTitle">Sin sesiones programadas</div>
+        <div class="itemMeta">Agrega una sesión, y aquí verás el registro de próximas fechas.</div>
+      </div></div>
+      <div><span class="pill">Calendario</span></div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = occ.slice(0,10).map(({o,b}) => {
+    const dt = new Date(o.startAt);
+    const when = dt.toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+    const [lbl, cls] = bookingTypeLabel(b.type);
+    const amount = b.amount ? ` • S/ ${b.amount}` : "";
+    const client = b.client ? ` • ${escapeHtml(b.client)}` : "";
+    const statusBadge = b.status === "done" ? ["Hecha","ok"] : (b.status === "cancelled" ? ["Cancelada","warn"] : ["Programada","neutral"]);
+    const title = b.title ? escapeHtml(b.title) : lbl;
+    const rep = b.recurrence?.freq ? " • semanal" : "";
+    return `<div class="item">
+      <div class="itemLeft">
+        <div>
+          <div class="itemTitle">${title}</div>
+          <div class="itemMeta">${when}${client}${amount}${rep}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge ${cls}">${lbl}</span>
+        <span class="badge ${statusBadge[1]}">${statusBadge[0]}</span>
+        <button class="btn ghost" data-act="bookEdit" data-id="${b.id}" title="Editar">✎</button>
+        <button class="btn ghost" data-act="bookDel" data-id="${b.id}" title="Eliminar">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderReminders(){
+  const list = $("#remindersList");
+  if(!list) return;
+  const items = [...STATE.reminders].sort((a,b)=>{
+    // pendientes arriba, luego por dueAt
+    const ad = a.doneAt ? 1 : 0;
+    const bd = b.doneAt ? 1 : 0;
+    if(ad !== bd) return ad - bd;
+    const at = a.dueAt ? new Date(a.dueAt).getTime() : Infinity;
+    const bt = b.dueAt ? new Date(b.dueAt).getTime() : Infinity;
+    return at - bt;
+  });
+
+  if(!items.length){
+    list.innerHTML = `<div class="item">
+      <div class="itemLeft"><div>
+        <div class="itemTitle">Nada pendiente</div>
+        <div class="itemMeta">Si algo ronda tu cabeza, ponlo aquí y suéltalo. 🧠✨</div>
+      </div></div>
+      <div><span class="pill">To-do</span></div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = items.slice(0,20).map(r => {
+    const done = !!r.doneAt;
+    const due = r.dueAt ? new Date(r.dueAt).toLocaleString() : "sin fecha";
+    return `<div class="item">
+      <div class="itemLeft">
+        <button class="btn ${done?"primary":""}" data-act="remToggle" data-id="${r.id}">${done?"✓":"○"}</button>
+        <div>
+          <div class="itemTitle ${done?"remDone":""}">${escapeHtml(r.text)}</div>
+          <div class="itemMeta">${due}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn ghost" data-act="remEdit" data-id="${r.id}" title="Editar">✎</button>
+        <button class="btn ghost" data-act="remDel" data-id="${r.id}" title="Eliminar">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
 function updateSyncUI(){
   const el = $("#syncStatus");
   if(!SETTINGS.syncEnabled || !SETTINGS.appsScriptUrl){
@@ -744,6 +1077,90 @@ function wire(){
   $("#planDaySelect").addEventListener("change", () => {
     renderPlan();
   });
+
+  // Calendar navigation
+  const prev = $("#btnCalPrev");
+  const next = $("#btnCalNext");
+  const addBookBtn = $("#btnAddBooking");
+  if(prev && next){
+    prev.addEventListener("click", ()=>{
+      if(!STATE.calMonth) STATE.calMonth = monthKey(new Date());
+      const s = startOfMonth(STATE.calMonth);
+      s.setMonth(s.getMonth()-1);
+      STATE.calMonth = monthKey(s);
+      saveState();
+      renderCalendar();
+    });
+    next.addEventListener("click", ()=>{
+      if(!STATE.calMonth) STATE.calMonth = monthKey(new Date());
+      const s = startOfMonth(STATE.calMonth);
+      s.setMonth(s.getMonth()+1);
+      STATE.calMonth = monthKey(s);
+      saveState();
+      renderCalendar();
+    });
+  }
+
+  if(addBookBtn){
+    addBookBtn.addEventListener("click", ()=> openBookingModal());
+  }
+
+  // Calendar day click
+  const cal = $("#calendar");
+  if(cal){
+    cal.addEventListener("click", (e)=>{
+      const cell = e.target.closest("[data-act='calDay']");
+      if(!cell) return;
+      const day = cell.dataset.day;
+      openBookingModal(null, { day });
+    });
+  }
+
+  // Bookings list actions
+  const bookingsList = $("#bookingsList");
+  if(bookingsList){
+    bookingsList.addEventListener("click", (e)=>{
+      const btn = e.target.closest("button[data-act]");
+      if(!btn) return;
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if(act === "bookEdit") openBookingModal(id);
+      if(act === "bookDel"){
+        openModal(
+          "Eliminar sesión",
+          `<div class="itemMeta">Se elimina del calendario y del registro local.</div>`,
+          `<button class="btn" id="mCancel">Cancelar</button><button class="btn warn" id="mOk">Eliminar</button>`
+        );
+        $("#mCancel").onclick = closeModal;
+        $("#mOk").onclick = ()=>{ deleteBooking(id); closeModal(); };
+      }
+    });
+  }
+
+  // Reminders
+  const addRem = $("#btnAddReminder");
+  if(addRem) addRem.addEventListener("click", ()=> openReminderModal());
+
+  const remList = $("#remindersList");
+  if(remList){
+    remList.addEventListener("click", (e)=>{
+      const btn = e.target.closest("button[data-act]");
+      if(!btn) return;
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if(act === "remToggle") toggleReminderDone(id);
+      if(act === "remEdit") openReminderModal(id);
+      if(act === "remDel"){
+        openModal(
+          "Eliminar recordatorio",
+          `<div class="itemMeta">Se borra localmente (y queda registro para sync).</div>`,
+          `<button class="btn" id="mCancel">Cancelar</button><button class="btn warn" id="mOk">Eliminar</button>`
+        );
+        $("#mCancel").onclick = closeModal;
+        $("#mOk").onclick = ()=>{ deleteReminder(id); closeModal(); };
+      }
+    });
+  }
 
   function openTaskModal_(defaults){
     const defCat = defaults?.category || "mission";
@@ -1069,6 +1486,165 @@ function openIdeaModal(ideaId=null){
     };
     if(isEdit) updateIdea(ideaId, patch);
     else addIdea(patch);
+    closeModal();
+  };
+}
+
+function openBookingModal(bookingId=null, opts={}){
+  const isEdit = !!bookingId;
+  const b = isEdit ? STATE.bookings.find(x=>x.id===bookingId) : null;
+
+  const prefDay = opts?.day || null;
+  const defaultStart = (()=>{
+    if(b?.startAt) return b.startAt;
+    if(prefDay){
+      // hoy a las 10:00 por defecto
+      return new Date(`${prefDay}T10:00:00`).toISOString();
+    }
+    const d = new Date();
+    d.setMinutes(0,0,0);
+    d.setHours(Math.min(20, d.getHours()+1));
+    return d.toISOString();
+  })();
+
+  const rec = b?.recurrence || null;
+
+  openModal(
+    isEdit ? "Editar sesión" : "Programar sesión",
+    `
+      <div class="row">
+        <label class="label">Tipo</label>
+        <select id="mBType" class="input">
+          <option value="tarot" ${(b?.type||"tarot")==="tarot"?"selected":""}>Tarot</option>
+          <option value="astrologia" ${(b?.type||"tarot")==="astrologia"?"selected":""}>Astrología</option>
+          <option value="suscripcion" ${(b?.type||"tarot")==="suscripcion"?"selected":""}>Suscripción</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <label class="label">Cliente</label>
+        <input id="mBClient" class="input" value="${escapeHtml(b?.client||"")}" placeholder="Ej: @maria" />
+      </div>
+
+      <div class="row">
+        <label class="label">Título (opcional)</label>
+        <input id="mBTitle" class="input" value="${escapeHtml(b?.title||"")}" placeholder="Ej: Lectura general / Carta natal" />
+      </div>
+
+      <div class="row">
+        <label class="label">Fecha y hora</label>
+        <input id="mBStart" type="datetime-local" class="input" value="${toInputDateTimeLocal(defaultStart)}" />
+      </div>
+
+      <div class="row">
+        <label class="label">Duración (min)</label>
+        <input id="mBDur" type="number" class="input" value="${escapeHtml(String(b?.durationMin ?? 60))}" min="15" step="15" />
+      </div>
+
+      <div class="row">
+        <label class="label">Monto (S/)</label>
+        <input id="mBAmt" type="number" class="input" value="${escapeHtml(String(b?.amount ?? 0))}" min="0" step="1" />
+      </div>
+
+      <div class="row">
+        <label class="label">Estado</label>
+        <select id="mBStatus" class="input">
+          <option value="scheduled" ${(b?.status||"scheduled")==="scheduled"?"selected":""}>Programada</option>
+          <option value="done" ${(b?.status||"scheduled")==="done"?"selected":""}>Hecha</option>
+          <option value="cancelled" ${(b?.status||"scheduled")==="cancelled"?"selected":""}>Cancelada</option>
+        </select>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label class="label">Repetir semanalmente</label>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input type="checkbox" id="mBRepeat" ${rec?.freq==="weekly"?"checked":""} />
+          <span class="itemMeta">Útil para suscripciones.</span>
+        </div>
+      </div>
+
+      <div class="row">
+        <label class="label">Hasta (opcional)</label>
+        <input id="mBUntil" type="date" class="input" value="${escapeHtml(rec?.until||"")}" />
+        <div class="itemMeta">Si lo dejas vacío, seguirá apareciendo semanalmente (tú lo puedes cortar luego).</div>
+      </div>
+
+      <div class="row">
+        <label class="label">Notas</label>
+        <input id="mBNotes" class="input" value="${escapeHtml(b?.notes||"")}" placeholder="Ej: depósito, enlace de Zoom, tema a tocar…" />
+      </div>
+    `,
+    `
+      <button class="btn" id="mCancel">Cancelar</button>
+      <button class="btn primary" id="mOk">${isEdit ? "Guardar" : "Agregar"}</button>
+    `
+  );
+
+  $("#mCancel").onclick = closeModal;
+  $("#mOk").onclick = () => {
+    const type = $("#mBType").value;
+    const client = $("#mBClient").value;
+    const title = $("#mBTitle").value;
+    const startAt = parseInputDateTimeLocal($("#mBStart").value);
+    const durationMin = Number($("#mBDur").value || 60) || 60;
+    const amount = Number($("#mBAmt").value || 0) || 0;
+    const status = $("#mBStatus").value || "scheduled";
+    const notes = $("#mBNotes").value;
+
+    if(!startAt){ toast("Fecha/hora inválida."); return; }
+
+    const repeat = $("#mBRepeat").checked;
+    const until = $("#mBUntil").value || null;
+    const recurrence = repeat ? { freq:"weekly", interval:1, until } : null;
+
+    const payload = { type, client, title, startAt, durationMin, amount, status, notes, recurrence };
+    if(isEdit) updateBooking(bookingId, payload);
+    else addBooking(payload);
+    closeModal();
+  };
+}
+
+function openReminderModal(reminderId=null){
+  const isEdit = !!reminderId;
+  const r = isEdit ? STATE.reminders.find(x=>x.id===reminderId) : null;
+
+  openModal(
+    isEdit ? "Editar recordatorio" : "Nuevo recordatorio",
+    `
+      <div class="row">
+        <label class="label">Texto</label>
+        <input id="mRText" class="input" value="${escapeHtml(r?.text||"")}" placeholder="Ej: escribir a @ana y ofrecer promo" />
+      </div>
+      <div class="row">
+        <label class="label">Fecha y hora (opcional)</label>
+        <input id="mRDue" type="datetime-local" class="input" value="${r?.dueAt ? toInputDateTimeLocal(r.dueAt) : ""}" />
+      </div>
+    `,
+    `
+      <button class="btn" id="mCancel">Cancelar</button>
+      <button class="btn primary" id="mOk">${isEdit ? "Guardar" : "Agregar"}</button>
+    `
+  );
+
+  $("#mCancel").onclick = closeModal;
+  $("#mOk").onclick = () => {
+    const text = $("#mRText").value;
+    const dueRaw = $("#mRDue").value;
+    const dueAt = dueRaw ? parseInputDateTimeLocal(dueRaw) : null;
+    if(isEdit){
+      const rr = STATE.reminders.find(x=>x.id===reminderId);
+      if(!rr) return;
+      rr.text = (text||"").trim();
+      rr.dueAt = dueAt;
+      enqueueEvent("reminder_update", { id: rr.id, patch: { text: rr.text, dueAt: rr.dueAt } });
+      saveState();
+      renderReminders();
+      renderMetrics();
+    }else{
+      addReminder({ text, dueAt });
+    }
     closeModal();
   };
 }
