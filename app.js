@@ -14,6 +14,53 @@ const DEFAULT_SETTINGS = {
 const nowISO = () => new Date().toISOString();
 const todayKey = () => new Date().toISOString().slice(0,10);
 
+// ---- Zodiac helpers ----
+const ZODIAC_SIGNS = [
+  "Aries","Tauro","Géminis","Cáncer","Leo","Virgo","Libra","Escorpio","Sagitario","Capricornio","Acuario","Piscis"
+];
+
+function normHandle(h){
+  return (h||"").trim().replace(/^@/,"").toLowerCase();
+}
+
+function zodiacFromDob(dob){
+  // dob: "YYYY-MM-DD"
+  try{
+    if(!dob) return "";
+    const [y,m,d] = dob.split("-").map(Number);
+    if(!m || !d) return "";
+    const md = m*100 + d;
+    if(md >= 321 && md <= 419) return "Aries";
+    if(md >= 420 && md <= 520) return "Tauro";
+    if(md >= 521 && md <= 620) return "Géminis";
+    if(md >= 621 && md <= 722) return "Cáncer";
+    if(md >= 723 && md <= 822) return "Leo";
+    if(md >= 823 && md <= 922) return "Virgo";
+    if(md >= 923 && md <= 1022) return "Libra";
+    if(md >= 1023 && md <= 1121) return "Escorpio";
+    if(md >= 1122 && md <= 1221) return "Sagitario";
+    if(md >= 1222 || md <= 119) return "Capricornio";
+    if(md >= 120 && md <= 218) return "Acuario";
+    if(md >= 219 && md <= 320) return "Piscis";
+    return "";
+  }catch(e){ return ""; }
+}
+
+function findClientByBookingClientString(str){
+  // Busca por handle (con o sin @) o por nombre
+  const q = (str||"").trim();
+  if(!q) return null;
+  const nh = normHandle(q);
+  let c = STATE.clients.find(x => normHandle(x.handle) === nh);
+  if(c) return c;
+  const ql = q.toLowerCase();
+  c = STATE.clients.find(x => (x.name||"").toLowerCase() === ql);
+  if(c) return c;
+  c = STATE.clients.find(x => ((x.name||"")+" "+(x.handle||"")).toLowerCase().includes(ql));
+  return c || null;
+}
+
+
 // ---- Week helpers (ISO-ish) ----
 function pad2(n){ return String(n).padStart(2,"0"); }
 
@@ -140,6 +187,17 @@ function normalizeState_(st){
     if(!t.pinnedDay) t.pinnedDay = todayKey();
   }
 
+  // Back-compat: client profile fields
+  for(const c of st.clients){
+    if(!c.name) c.name = c.name || "";
+    if(!c.handle) c.handle = c.handle || "";
+    if(!c.status) c.status = c.status || "lead";
+    if(!c.nextStep) c.nextStep = c.nextStep || "";
+    if(!c.notes) c.notes = c.notes || "";
+    if(!c.dob) c.dob = c.dob || "";           // YYYY-MM-DD
+    if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
+  }
+
   // Back-compat: bookings + reminders
   for(const b of st.bookings){
     if(!b.type) b.type = "tarot";
@@ -148,6 +206,7 @@ function normalizeState_(st){
     if(!b.durationMin) b.durationMin = 60;
     if(typeof b.amount !== "number") b.amount = Number(b.amount || 0) || 0;
     if(!b.recurrence) b.recurrence = null;
+    b.sessionRecords = Array.isArray(b.sessionRecords) ? b.sessionRecords : [];
   }
   for(const r of st.reminders){
     if(!r.text) r.text = "";
@@ -751,11 +810,15 @@ function renderClients(){
     const name = c.name || c.handle || "(sin nombre)";
     const handle = c.handle ? `@${c.handle.replace(/^@/,"")}` : "";
     const next = c.nextStep ? escapeHtml(c.nextStep) : "—";
+    const dob = c.dob ? escapeHtml(c.dob) : "";
+    const zodiac = (c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "")) || "";
+    const zPill = zodiac ? ` <span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "";
+    const bdayMeta = dob ? ` • ${dob}` : "";
     return `<div class="item">
       <div class="itemLeft">
         <div>
-          <div class="itemTitle">${escapeHtml(name)} <span class="pill">${escapeHtml(handle)}</span></div>
-          <div class="itemMeta"><b>Próximo:</b> ${next}</div>
+          <div class="itemTitle">${escapeHtml(name)} <span class="pill">${escapeHtml(handle)}</span>${zPill}</div>
+          <div class="itemMeta"><b>Próximo:</b> ${next}${bdayMeta}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -952,6 +1015,8 @@ function renderBookings(){
       <div style="display:flex;gap:8px;align-items:center">
         <span class="badge ${cls}">${lbl}</span>
         <span class="badge ${statusBadge[1]}">${statusBadge[0]}</span>
+        ${(b.sessionRecords||[]).some(r=>r.occStartAt===o.startAt) ? `<span class="pill">log</span>` : ``}
+        <button class="btn ghost" data-act="bookSession" data-id="${b.id}" data-occ="${escapeHtml(o.startAt)}" title="Abrir sesión">📝</button>
         <button class="btn ghost" data-act="bookEdit" data-id="${b.id}" title="Editar">✎</button>
         <button class="btn ghost" data-act="bookDel" data-id="${b.id}" title="Eliminar">🗑</button>
       </div>
@@ -1112,7 +1177,14 @@ function wire(){
       const cell = e.target.closest("[data-act='calDay']");
       if(!cell) return;
       const day = cell.dataset.day;
-      openBookingModal(null, { day });
+      const start = new Date(day + "T00:00:00").toISOString();
+      const end = new Date(day + "T23:59:59").toISOString();
+      const items = occurrencesInRange(start, end);
+      if(items && items.length){
+        openDayAgendaModal(day);
+      }else{
+        openBookingModal(null, { day });
+      }
     });
   }
 
@@ -1124,6 +1196,10 @@ function wire(){
       if(!btn) return;
       const act = btn.dataset.act;
       const id = btn.dataset.id;
+      if(act === "bookSession"){
+        const occStartAt = btn.dataset.occ || null;
+        openClientSessionModal(id, occStartAt);
+      }
       if(act === "bookEdit") openBookingModal(id);
       if(act === "bookDel"){
         openModal(
@@ -1411,6 +1487,20 @@ function openClientModal(clientId=null){
         </select>
       </div>
       <div class="row">
+        <label class="label">Fecha de nacimiento</label>
+        <input id="mCDob" type="date" class="input" value="${escapeHtml(c?.dob||"")}" />
+        <div class="itemMeta">Si lo pones, puedo calcular el signo automáticamente (o lo eliges tú).</div>
+      </div>
+      <div class="row">
+        <label class="label">Signo</label>
+        <select id="mCZodiac" class="input">
+          <option value="">(sin definir)</option>
+          ${ZODIAC_SIGNS.map(z => `<option value="${z}" ${(c?.zodiac===z)?"selected":""}>${z}</option>`).join("")}
+        </select>
+        <div class="itemMeta">Tip: si lo dejas vacío pero hay fecha, al guardar se autocompleta.</div>
+      </div>
+
+<div class="row">
         <label class="label">Próximo paso</label>
         <input id="mCNext" class="input" value="${escapeHtml(c?.nextStep||"")}" placeholder="Ej: enviar propuesta / pedir fecha de nacimiento" />
       </div>
@@ -1432,8 +1522,12 @@ function openClientModal(clientId=null){
       handle: $("#mCHandle").value,
       status: $("#mCStatus").value,
       nextStep: $("#mCNext").value,
-      notes: $("#mCNotes").value
+      notes: $("#mCNotes").value,
+      dob: $("#mCDob").value,
+      zodiac: $("#mCZodiac").value
     };
+    if(obj.dob && !obj.zodiac) obj.zodiac = zodiacFromDob(obj.dob);
+
     if(isEdit) updateClient(clientId, obj);
     else addClient(obj);
     closeModal();
@@ -1488,6 +1582,207 @@ function openIdeaModal(ideaId=null){
     else addIdea(patch);
     closeModal();
   };
+}
+
+
+function openDayAgendaModal(day){
+  const start = new Date(day + "T00:00:00").toISOString();
+  const end = new Date(day + "T23:59:59").toISOString();
+  const occ = occurrencesInRange(start, end)
+    .map(o => ({ o, b: STATE.bookings.find(x=>x.id===o.bookingId) }))
+    .filter(x => x.b)
+    .sort((a,b)=> new Date(a.o.startAt) - new Date(b.o.startAt));
+
+  const rows = occ.map(({o,b})=>{
+    const dt = new Date(o.startAt);
+    const when = dt.toLocaleTimeString(undefined, { hour:"2-digit", minute:"2-digit" });
+    const [lbl, cls] = bookingTypeLabel(b.type);
+    const title = b.title ? escapeHtml(b.title) : lbl;
+    const client = b.client ? ` • ${escapeHtml(b.client)}` : "";
+    const hasLog = (b.sessionRecords||[]).some(r=>r.occStartAt===o.startAt);
+    const logPill = hasLog ? `<span class="pill">log</span>` : ``;
+    return `<div class="item">
+      <div class="itemLeft">
+        <div>
+          <div class="itemTitle">${when} • ${title} ${logPill}</div>
+          <div class="itemMeta"><span class="badge ${cls}">${lbl}</span>${client}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn ghost" data-act="daySession" data-id="${b.id}" data-occ="${escapeHtml(o.startAt)}" title="Abrir sesión">📝</button>
+        <button class="btn ghost" data-act="dayEdit" data-id="${b.id}" title="Editar">✎</button>
+      </div>
+    </div>`;
+  }).join("");
+
+  openModal(
+    `Agenda ${day}`,
+    `
+      <div class="itemMeta">Toca 📝 para abrir la sesión con notas y recomendaciones. (Los puntos del calendario son estas sesiones.)</div>
+      <div class="divider"></div>
+      ${rows || `<div class="itemMeta">Sin sesiones para este día.</div>`}
+      <div class="divider"></div>
+      <button class="btn" id="mAddNew">＋ Programar otra sesión</button>
+    `,
+    `
+      <button class="btn" id="mCancel">Cerrar</button>
+    `
+  );
+
+  $("#mCancel").onclick = closeModal;
+  $("#mAddNew").onclick = ()=>{ closeModal(); openBookingModal(null,{day}); };
+
+  const body = $("#modalBody");
+  body.addEventListener("click", (e)=>{
+    const btn = e.target.closest("button[data-act]");
+    if(!btn) return;
+    const act = btn.dataset.act;
+    const id = btn.dataset.id;
+    if(act==="dayEdit"){ closeModal(); openBookingModal(id); }
+    if(act==="daySession"){ closeModal(); openClientSessionModal(id, btn.dataset.occ || null); }
+  }, { once:true });
+}
+
+function upsertBookingRecord_(bookingId, record){
+  const b = STATE.bookings.find(x=>x.id===bookingId);
+  if(!b) return;
+  b.sessionRecords = Array.isArray(b.sessionRecords) ? b.sessionRecords : [];
+  const idx = b.sessionRecords.findIndex(r => r.id === record.id);
+  if(idx >= 0) b.sessionRecords[idx] = record;
+  else{
+    const idx2 = b.sessionRecords.findIndex(r => r.occStartAt === record.occStartAt);
+    if(idx2 >= 0) b.sessionRecords[idx2] = record;
+    else b.sessionRecords.unshift(record);
+  }
+  enqueueEvent("booking_session_record_upsert", { bookingId, record });
+  saveState();
+  renderBookings();
+  renderCalendar();
+  updateSyncUI();
+}
+
+function openClientSessionModal(bookingId, occStartAt=null){
+  const b = STATE.bookings.find(x=>x.id===bookingId);
+  if(!b){ toast("No encuentro esa sesión."); return; }
+
+  const occIso = occStartAt || b.startAt;
+  const dt = new Date(occIso);
+  const whenFull = dt.toLocaleString(undefined, { weekday:"long", year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+
+  const clientStr = b.client || "";
+  const c = findClientByBookingClientString(clientStr);
+
+  const zodiac = c ? (c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "")) : "";
+  const dob = c?.dob || "";
+  const displayName = c ? (c.name || (c.handle?("@"+c.handle.replace(/^@/,"")):"(sin nombre)")) : (clientStr || "(sin cliente)");
+  const handleShow = c?.handle ? "@"+c.handle.replace(/^@/,"") : (clientStr||"");
+  const headerPills = [
+    zodiac ? `<span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "",
+    dob ? `<span class="pill">🎂 ${escapeHtml(dob)}</span>` : "",
+    handleShow ? `<span class="pill">${escapeHtml(handleShow)}</span>` : ""
+  ].filter(Boolean).join(" ");
+
+  const recs = Array.isArray(b.sessionRecords) ? b.sessionRecords : [];
+  let rec = recs.find(r => r.occStartAt === occIso) || null;
+  if(!rec){
+    rec = { id: uid("srec"), bookingId: b.id, occStartAt: occIso, createdAt: nowISO(), sessionNotes:"", recommendations:"", clientSnapshot: c ? { id:c.id, name:c.name, handle:c.handle, dob:c.dob, zodiac:c.zodiac } : { raw: clientStr } };
+  }
+
+  const statusBadge = b.status === "done" ? ["Hecha","ok"] : (b.status === "cancelled" ? ["Cancelada","warn"] : ["Programada","neutral"]);
+  const [lbl, cls] = bookingTypeLabel(b.type);
+
+  openModal(
+    "Sesión con cliente",
+    `
+      <div class="item">
+        <div class="itemLeft">
+          <div>
+            <div class="itemTitle">${escapeHtml(displayName)} ${headerPills}</div>
+            <div class="itemMeta">${escapeHtml(whenFull)}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <span class="badge ${cls}">${lbl}</span>
+          <span class="badge ${statusBadge[1]}">${statusBadge[0]}</span>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label class="label">Notas en sesión</label>
+        <textarea id="mSessNotes" class="input" style="min-height:110px;resize:vertical" placeholder="Puntos clave, cartas, interpretaciones, preguntas...">${escapeHtml(rec.sessionNotes||"")}</textarea>
+      </div>
+
+      <div class="row">
+        <label class="label">Recomendaciones</label>
+        <textarea id="mSessRecs" class="input" style="min-height:110px;resize:vertical" placeholder="Recomendaciones prácticas, rituales, hábitos, próximos pasos...">${escapeHtml(rec.recommendations||"")}</textarea>
+        <div class="itemMeta">Esto queda guardado dentro de la sesión (log) para revisarlo después.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <label class="label">Acciones rápidas</label>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn" id="mSessEditClient" ${c? "" : "disabled"}>Editar perfil</button>
+          <button class="btn" id="mSessCopy" title="Copiar resumen">📋 Copiar</button>
+        </div>
+        ${c ? "" : `<div class="itemMeta">Tip: para ver fecha de nacimiento y signo aquí, crea el cliente en CRM y usa el mismo handle.</div>`}
+      </div>
+    `,
+    `
+      <button class="btn" id="mCancel">Cerrar</button>
+      <button class="btn" id="mSave">Guardar</button>
+      <button class="btn primary" id="mSaveDone">Guardar y marcar hecha</button>
+    `
+  );
+
+  $("#mCancel").onclick = closeModal;
+
+  $("#mSessEditClient").onclick = ()=>{
+    if(!c) return;
+    rec.sessionNotes = $("#mSessNotes").value || "";
+    rec.recommendations = $("#mSessRecs").value || "";
+    upsertBookingRecord_(b.id, rec);
+    closeModal();
+    openClientModal(c.id);
+  };
+
+  $("#mSessCopy").onclick = async ()=>{
+    try{
+      const block = [
+        `Cliente: ${displayName} ${handleShow?("(" + handleShow + ")"):""}`,
+        `Fecha: ${whenFull}`,
+        zodiac ? `Signo: ${zodiac}` : "",
+        dob ? `Nacimiento: ${dob}` : "",
+        `Tipo: ${lbl}`,
+        `Notas: ${($("#mSessNotes").value||"").trim()}`,
+        `Recomendaciones: ${($("#mSessRecs").value||"").trim()}`
+      ].filter(Boolean).join("\n");
+      await navigator.clipboard.writeText(block);
+      toast("Copiado ✨");
+    }catch(e){
+      toast("No pude copiar (permiso del navegador).");
+    }
+  };
+
+  function saveOnly(markDone=false){
+    rec.sessionNotes = $("#mSessNotes").value || "";
+    rec.recommendations = $("#mSessRecs").value || "";
+    upsertBookingRecord_(b.id, rec);
+    if(markDone){
+      updateBooking(b.id, { ...b, status:"done" });
+    }else{
+      saveState();
+      renderBookings();
+      renderCalendar();
+      updateSyncUI();
+    }
+  }
+
+  $("#mSave").onclick = ()=>{ saveOnly(false); closeModal(); toast("Sesión guardada."); };
+  $("#mSaveDone").onclick = ()=>{ saveOnly(true); closeModal(); toast("Guardado y marcada como hecha."); };
 }
 
 function openBookingModal(bookingId=null, opts={}){
