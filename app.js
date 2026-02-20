@@ -1098,13 +1098,26 @@ function updateTimerUI(forceReset=false){
 }
 
 // ---------- Modal helpers ----------
-function openModal(title, bodyHtml, footHtml=""){
+function openModal(title, bodyHtml, footHtml="", opts={}){
+  const modal = document.querySelector("#modalOverlay .modal");
+  if(modal){
+    // reset variant/size classes
+    modal.classList.remove("modal-lg","modal-md","modal-sm","modal-session");
+    const size = String(opts?.size || "md").toLowerCase();
+    if(size === "lg") modal.classList.add("modal-lg");
+    else if(size === "sm") modal.classList.add("modal-sm");
+    else modal.classList.add("modal-md");
+    if(opts?.variant) modal.classList.add(`modal-${opts.variant}`);
+  }
+
   $("#modalTitle").textContent = title;
   $("#modalBody").innerHTML = bodyHtml;
   $("#modalFoot").innerHTML = footHtml;
   $("#modalOverlay").classList.remove("hidden");
 }
 function closeModal(){
+  const modal = document.querySelector("#modalOverlay .modal");
+  if(modal) modal.classList.remove("modal-lg","modal-md","modal-sm","modal-session");
   $("#modalOverlay").classList.add("hidden");
   $("#modalBody").innerHTML = "";
   $("#modalFoot").innerHTML = "";
@@ -1506,13 +1519,14 @@ function openClientModal(clientId=null){
       </div>
       <div class="row">
         <label class="label">Notas</label>
-        <input id="mCNotes" class="input" value="${escapeHtml(c?.notes||"")}" placeholder="Opcional" />
+        <textarea id="mCNotes" class="input" style="min-height:140px;resize:vertical" placeholder="Opcional">${escapeHtml(c?.notes||"")}</textarea>
       </div>
     `,
     `
       <button class="btn" id="mCancel">Cancelar</button>
       <button class="btn primary" id="mOk">${isEdit ? "Guardar" : "Agregar"}</button>
-    `
+    `,
+    { size: "lg" }
   );
 
   $("#mCancel").onclick = closeModal;
@@ -1694,14 +1708,13 @@ function openClientSessionModal(bookingId, occStartAt=null){
   openModal(
     "Sesión con cliente",
     `
-      <div class="item">
-        <div class="itemLeft">
-          <div>
-            <div class="itemTitle">${escapeHtml(displayName)} ${headerPills}</div>
-            <div class="itemMeta">${escapeHtml(whenFull)}</div>
-          </div>
+      <div class="sessTop">
+        <div class="sessTitle">
+          <div class="sessName">${escapeHtml(displayName)}</div>
+          <div class="sessPills">${headerPills || ""}</div>
+          <div class="sessWhen">${escapeHtml(whenFull)}</div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center">
+        <div class="sessBadges">
           <span class="badge ${cls}">${lbl}</span>
           <span class="badge ${statusBadge[1]}">${statusBadge[0]}</span>
         </div>
@@ -1709,22 +1722,24 @@ function openClientSessionModal(bookingId, occStartAt=null){
 
       <div class="divider"></div>
 
-      <div class="row">
-        <label class="label">Notas en sesión</label>
-        <textarea id="mSessNotes" class="input" style="min-height:110px;resize:vertical" placeholder="Puntos clave, cartas, interpretaciones, preguntas...">${escapeHtml(rec.sessionNotes||"")}</textarea>
-      </div>
+      <div class="sessGrid">
+        <div class="row">
+          <label class="label">Notas en sesión</label>
+          <textarea id="mSessNotes" class="input sessTextarea" placeholder="Puntos clave, cartas, interpretaciones, preguntas...">${escapeHtml(rec.sessionNotes||"")}</textarea>
+        </div>
 
-      <div class="row">
-        <label class="label">Recomendaciones</label>
-        <textarea id="mSessRecs" class="input" style="min-height:110px;resize:vertical" placeholder="Recomendaciones prácticas, rituales, hábitos, próximos pasos...">${escapeHtml(rec.recommendations||"")}</textarea>
-        <div class="itemMeta">Esto queda guardado dentro de la sesión (log) para revisarlo después.</div>
+        <div class="row">
+          <label class="label">Recomendaciones</label>
+          <textarea id="mSessRecs" class="input sessTextarea" placeholder="Recomendaciones prácticas, rituales, hábitos, próximos pasos...">${escapeHtml(rec.recommendations||"")}</textarea>
+          <div class="itemMeta">Esto queda guardado dentro de la sesión (log) para revisarlo después.</div>
+        </div>
       </div>
 
       <div class="divider"></div>
 
       <div class="row">
         <label class="label">Acciones rápidas</label>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="sessActions">
           <button class="btn" id="mSessEditClient" ${c? "" : "disabled"}>Editar perfil</button>
           <button class="btn" id="mSessCopy" title="Copiar resumen">📋 Copiar</button>
         </div>
@@ -1735,7 +1750,8 @@ function openClientSessionModal(bookingId, occStartAt=null){
       <button class="btn" id="mCancel">Cerrar</button>
       <button class="btn" id="mSave">Guardar</button>
       <button class="btn primary" id="mSaveDone">Guardar y marcar hecha</button>
-    `
+    `,
+    { size: "lg", variant: "session" }
   );
 
   $("#mCancel").onclick = closeModal;

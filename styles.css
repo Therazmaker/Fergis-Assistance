@@ -206,6 +206,26 @@ body{
   box-shadow: var(--shadow);
   display:flex;flex-direction:column;
 }
+.modal.modal-sm{ width:min(520px, 96vw); }
+.modal.modal-md{ width:min(680px, 96vw); }
+.modal.modal-lg{ width:min(1100px, 95vw); max-height: 92vh; }
+
+/* Session modal layout */
+.modal.modal-session .modalBody{ padding: 16px 18px; }
+.sessTop{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 14px;
+}
+.sessTitle{min-width: 0;}
+.sessName{font-weight: 950; font-size: 18px; letter-spacing: .2px;}
+.sessPills{margin-top: 6px; display:flex; gap:8px; flex-wrap:wrap;}
+.sessWhen{margin-top: 8px; color: var(--muted); font-size: 12px;}
+.sessBadges{display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.sessGrid{display:flex; flex-direction:column; gap: 14px;}
+.sessTextarea{min-height: 200px; resize: vertical;}
+.sessActions{display:flex; gap:10px; flex-wrap:wrap;}
 .modalHead{
   display:flex;align-items:center;justify-content:space-between;
   padding:12px 12px;
