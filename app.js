@@ -206,7 +206,19 @@ function normalizeState_(st){
     if(!b.durationMin) b.durationMin = 60;
     if(typeof b.amount !== "number") b.amount = Number(b.amount || 0) || 0;
     if(!b.recurrence) b.recurrence = null;
+    // Link to CRM client (preferred)
+    if(!('clientId' in b)) b.clientId = null;
     b.sessionRecords = Array.isArray(b.sessionRecords) ? b.sessionRecords : [];
+  }
+
+  // Back-compat: auto-link bookings to clients when possible
+  // (If a booking has client text but no clientId, try match by handle/name.)
+  for(const b of st.bookings){
+    if(b.clientId) continue;
+    const clientStr = (b.client || "").trim();
+    if(!clientStr) continue;
+    const c = findClientByBookingClientString(clientStr);
+    if(c) b.clientId = c.id;
   }
   for(const r of st.reminders){
     if(!r.text) r.text = "";
@@ -215,6 +227,35 @@ function normalizeState_(st){
     if(!r.dueAt) r.dueAt = null;
   }
   return st;
+}
+
+// ---------- Client/booking helpers ----------
+function zodiacElement_(z){
+  const map = {
+    "Aries":"fire","Leo":"fire","Sagitario":"fire",
+    "Tauro":"earth","Virgo":"earth","Capricornio":"earth",
+    "Géminis":"air","Libra":"air","Acuario":"air",
+    "Cáncer":"water","Escorpio":"water","Piscis":"water"
+  };
+  return map[z] || "";
+}
+
+function getClientForBooking_(b){
+  if(!b) return { client:null, display:"", zodiac:"", element:"", handleShow:"" };
+  let c = null;
+  if(b.clientId) c = STATE.clients.find(x=>x.id===b.clientId) || null;
+  if(!c && b.client){
+    c = findClientByBookingClientString(b.client);
+    if(c && !b.clientId){
+      // Opportunistic upgrade in-memory; persist on next saveState()
+      b.clientId = c.id;
+    }
+  }
+  const zodiac = c ? (c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "")) : "";
+  const element = zodiac ? zodiacElement_(zodiac) : "";
+  const handleShow = c?.handle ? "@"+String(c.handle).replace(/^@/,"") : (b.client||"");
+  const display = c ? (c.name || handleShow || "(sin nombre)") : (b.client || "(sin cliente)");
+  return { client:c, display, zodiac, element, handleShow };
 }
 
 function seedPlanGirasolIfNeeded_(){
@@ -276,6 +317,9 @@ function makeBooking_(obj={}){
     id: uid("book"),
     type: obj.type || "tarot", // tarot | astrologia | suscripcion
     title: (obj.title || "").trim() || null,
+    // Prefer linking to a CRM client via clientId.
+    // Keep client text as display/back-compat.
+    clientId: obj.clientId || null,
     client: (obj.client || "").trim(),
     startAt: obj.startAt || nowISO(), // ISO
     durationMin: Math.max(15, Number(obj.durationMin || 60) || 60),
@@ -959,7 +1003,9 @@ function renderCalendar(){
     const dots = items.slice(0,3).map(o => {
       const b = STATE.bookings.find(x=>x.id===o.bookingId);
       const cls = bookingDotClass(b?.type);
-      return `<span class="dot ${cls}"></span>`;
+      const info = getClientForBooking_(b);
+      const zcls = info.element ? `z-${info.element}` : "";
+      return `<span class="dot ${cls} ${zcls}" title="${escapeHtml(info.display || '')}"></span>`;
     }).join("");
     const more = items.length > 3 ? `<span class="pill">+${items.length-3}</span>` : "";
     const cls = ["calCell", inMonth?"":"muted", (k===today)?"calToday":""].join(" ").trim();
@@ -1001,14 +1047,16 @@ function renderBookings(){
     const when = dt.toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
     const [lbl, cls] = bookingTypeLabel(b.type);
     const amount = b.amount ? ` • S/ ${b.amount}` : "";
-    const client = b.client ? ` • ${escapeHtml(b.client)}` : "";
+    const info = getClientForBooking_(b);
+    const client = info.display ? ` • ${escapeHtml(info.display)}` : (b.client ? ` • ${escapeHtml(b.client)}` : "");
+    const zpill = info.zodiac ? ` <span class="pill mini">${escapeHtml(info.zodiac)}</span>` : "";
     const statusBadge = b.status === "done" ? ["Hecha","ok"] : (b.status === "cancelled" ? ["Cancelada","warn"] : ["Programada","neutral"]);
     const title = b.title ? escapeHtml(b.title) : lbl;
     const rep = b.recurrence?.freq ? " • semanal" : "";
     return `<div class="item">
       <div class="itemLeft">
         <div>
-          <div class="itemTitle">${title}</div>
+          <div class="itemTitle">${title}${zpill}</div>
           <div class="itemMeta">${when}${client}${amount}${rep}</div>
         </div>
       </div>
@@ -1478,6 +1526,74 @@ function openClientModal(clientId=null){
   const isEdit = !!clientId;
   const c = isEdit ? STATE.clients.find(x=>x.id===clientId) : null;
 
+  // Build client-linked session summary (only in edit mode)
+  let sessBlock = "";
+  if(isEdit && c){
+    const now = Date.now();
+    const pastStart = new Date(now - 120*86400000).toISOString();
+    const futureEnd = new Date(now + 180*86400000).toISOString();
+    const occ = occurrencesInRange(pastStart, futureEnd)
+      .map(o => ({ o, b: STATE.bookings.find(x=>x.id===o.bookingId) }))
+      .filter(x => x.b)
+      .filter(({b}) => {
+        if(b.clientId && String(b.clientId)===String(c.id)) return true;
+        // fallback: try string match by handle/name
+        if(!b.clientId && b.client){
+          const fc = findClientByBookingClientString(b.client);
+          return fc && String(fc.id)===String(c.id);
+        }
+        return false;
+      })
+      .sort((a,b)=> new Date(a.o.startAt) - new Date(b.o.startAt));
+
+    const upcoming = occ.filter(x=> new Date(x.o.startAt).getTime() >= (now - 5*60000)).slice(0,6);
+    const past = occ.filter(x=> new Date(x.o.startAt).getTime() < (now - 5*60000)).slice(-6).reverse();
+
+    function row_(x){
+      const dt = new Date(x.o.startAt);
+      const when = dt.toLocaleString(undefined, { year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+      const [lbl, cls] = bookingTypeLabel(x.b.type);
+      const title = x.b.title ? escapeHtml(x.b.title) : lbl;
+      const hasLog = (x.b.sessionRecords||[]).some(r=>r.occStartAt===x.o.startAt);
+      const logPill = hasLog ? `<span class="pill">log</span>` : ``;
+      return `<div class="item compact">
+        <div class="itemLeft">
+          <div>
+            <div class="itemTitle">${title} ${logPill}</div>
+            <div class="itemMeta">${escapeHtml(when)} • <span class="badge ${cls}">${lbl}</span></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <button class="btn ghost" data-act="cOpenSession" data-id="${x.b.id}" data-occ="${escapeHtml(x.o.startAt)}" title="Abrir sesión">📝</button>
+          <button class="btn ghost" data-act="cEditBooking" data-id="${x.b.id}" title="Editar">✎</button>
+        </div>
+      </div>`;
+    }
+
+    sessBlock = `
+      <div class="divider"></div>
+      <div class="row">
+        <label class="label">Sesiones (vinculadas al cliente)</label>
+        <div class="itemMeta">Desde aquí puedes programar, abrir el log (notas + recomendaciones) o editar la sesión.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">
+          <button class="btn" id="mCBook">📅 Programar sesión</button>
+        </div>
+      </div>
+      <div class="row">
+        <div class="grid2">
+          <div>
+            <div class="itemMeta" style="margin-bottom:8px">Próximas</div>
+            ${upcoming.length ? upcoming.map(row_).join("") : `<div class="itemMeta">Sin próximas sesiones.</div>`}
+          </div>
+          <div>
+            <div class="itemMeta" style="margin-bottom:8px">Pasadas</div>
+            ${past.length ? past.map(row_).join("") : `<div class="itemMeta">Sin historial aún.</div>`}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   openModal(
     isEdit ? "Editar cliente" : "Nuevo cliente",
     `
@@ -1521,6 +1637,7 @@ function openClientModal(clientId=null){
         <label class="label">Notas</label>
         <textarea id="mCNotes" class="input" style="min-height:140px;resize:vertical" placeholder="Opcional">${escapeHtml(c?.notes||"")}</textarea>
       </div>
+      ${sessBlock}
     `,
     `
       <button class="btn" id="mCancel">Cancelar</button>
@@ -1546,6 +1663,24 @@ function openClientModal(clientId=null){
     else addClient(obj);
     closeModal();
   };
+
+  // Client session actions (only in edit)
+  if(isEdit && c){
+    const bookBtn = $("#mCBook");
+    if(bookBtn){
+      bookBtn.onclick = ()=>{ closeModal(); openBookingModal(null, { clientId: c.id }); };
+    }
+    const body = $("#modalBody");
+    body.addEventListener("click", (e)=>{
+      const btn = e.target.closest("button[data-act]");
+      if(!btn) return;
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      const occ = btn.dataset.occ || null;
+      if(act==="cEditBooking"){ closeModal(); openBookingModal(id); }
+      if(act==="cOpenSession"){ closeModal(); openClientSessionModal(id, occ); }
+    });
+  }
 }
 
 function openIdeaModal(ideaId=null){
@@ -1612,7 +1747,8 @@ function openDayAgendaModal(day){
     const when = dt.toLocaleTimeString(undefined, { hour:"2-digit", minute:"2-digit" });
     const [lbl, cls] = bookingTypeLabel(b.type);
     const title = b.title ? escapeHtml(b.title) : lbl;
-    const client = b.client ? ` • ${escapeHtml(b.client)}` : "";
+    const info = getClientForBooking_(b);
+    const client = info.display ? ` • ${escapeHtml(info.display)}` : (b.client ? ` • ${escapeHtml(b.client)}` : "");
     const hasLog = (b.sessionRecords||[]).some(r=>r.occStartAt===o.startAt);
     const logPill = hasLog ? `<span class="pill">log</span>` : ``;
     return `<div class="item">
@@ -1684,12 +1820,13 @@ function openClientSessionModal(bookingId, occStartAt=null){
   const whenFull = dt.toLocaleString(undefined, { weekday:"long", year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
 
   const clientStr = b.client || "";
-  const c = findClientByBookingClientString(clientStr);
+  const info = getClientForBooking_(b);
+  const c = info.client;
 
-  const zodiac = c ? (c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "")) : "";
+  const zodiac = info.zodiac;
   const dob = c?.dob || "";
-  const displayName = c ? (c.name || (c.handle?("@"+c.handle.replace(/^@/,"")):"(sin nombre)")) : (clientStr || "(sin cliente)");
-  const handleShow = c?.handle ? "@"+c.handle.replace(/^@/,"") : (clientStr||"");
+  const displayName = info.display || (clientStr || "(sin cliente)");
+  const handleShow = info.handleShow || (clientStr||"");
   const headerPills = [
     zodiac ? `<span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "",
     dob ? `<span class="pill">🎂 ${escapeHtml(dob)}</span>` : "",
@@ -1805,6 +1942,9 @@ function openBookingModal(bookingId=null, opts={}){
   const isEdit = !!bookingId;
   const b = isEdit ? STATE.bookings.find(x=>x.id===bookingId) : null;
 
+  const prefClientId = opts?.clientId || null;
+  const currentClientId = (b?.clientId || prefClientId || "");
+
   const prefDay = opts?.day || null;
   const defaultStart = (()=>{
     if(b?.startAt) return b.startAt;
@@ -1834,7 +1974,17 @@ function openBookingModal(bookingId=null, opts={}){
 
       <div class="row">
         <label class="label">Cliente</label>
+        <select id="mBClientId" class="input">
+          <option value="">(manual)</option>
+          ${STATE.clients.map(c=>{
+            const handle = c.handle ? "@"+String(c.handle).replace(/^@/,"") : "";
+            const lbl = (c.name || handle || "(sin nombre)") + (handle && c.name ? "  " + handle : "");
+            const sel = (String(c.id)===String(currentClientId)) ? "selected" : "";
+            return `<option value="${escapeHtml(c.id)}" ${sel}>${escapeHtml(lbl)}</option>`;
+          }).join("")}
+        </select>
         <input id="mBClient" class="input" value="${escapeHtml(b?.client||"")}" placeholder="Ej: @maria" />
+        <div class="itemMeta">Tip: si eliges un cliente del CRM, queda vinculado (clientId). El texto es solo display.</div>
       </div>
 
       <div class="row">
@@ -1896,6 +2046,7 @@ function openBookingModal(bookingId=null, opts={}){
   $("#mCancel").onclick = closeModal;
   $("#mOk").onclick = () => {
     const type = $("#mBType").value;
+    const clientId = $("#mBClientId").value || null;
     const client = $("#mBClient").value;
     const title = $("#mBTitle").value;
     const startAt = parseInputDateTimeLocal($("#mBStart").value);
@@ -1910,11 +2061,29 @@ function openBookingModal(bookingId=null, opts={}){
     const until = $("#mBUntil").value || null;
     const recurrence = repeat ? { freq:"weekly", interval:1, until } : null;
 
-    const payload = { type, client, title, startAt, durationMin, amount, status, notes, recurrence };
+    const payload = { type, clientId, client, title, startAt, durationMin, amount, status, notes, recurrence };
     if(isEdit) updateBooking(bookingId, payload);
     else addBooking(payload);
     closeModal();
   };
+
+  // Sync client selector -> text
+  const sel = $("#mBClientId");
+  const txt = $("#mBClient");
+  function applyClientSelection_(){
+    const id = sel.value || "";
+    if(!id){
+      txt.placeholder = "Ej: @maria";
+      return;
+    }
+    const c = STATE.clients.find(x=>String(x.id)===String(id));
+    if(!c) return;
+    const handle = c.handle ? "@"+String(c.handle).replace(/^@/,"") : "";
+    txt.value = handle || c.name || txt.value;
+  }
+  sel.addEventListener("change", applyClientSelection_);
+  // initial
+  if(currentClientId && !txt.value) applyClientSelection_();
 }
 
 function openReminderModal(reminderId=null){

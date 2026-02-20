@@ -105,6 +105,7 @@ body{
   padding:4px 10px;border-radius:999px;border:1px solid var(--line);
   background: rgba(255,255,255,.03);
 }
+.pill.mini{padding:2px 8px;font-size:11px;opacity:.9}
 .badge{
   font-size:11px;font-weight:800;
   padding:4px 10px;border-radius:999px;
@@ -162,6 +163,22 @@ body{
 .dot{width:8px;height:8px;border-radius:999px;background:rgba(255,214,102,.9);display:inline-block}
 .dot.alt{background:rgba(124,255,178,.9)}
 .dot.neutral{background:rgba(163,198,255,.9)}
+
+/* Zodiac element tint (subtle inner ring) */
+.dot.z-fire{box-shadow:0 0 0 2px rgba(255,120,120,0.22) inset;}
+.dot.z-earth{box-shadow:0 0 0 2px rgba(160,255,160,0.18) inset;}
+.dot.z-air{box-shadow:0 0 0 2px rgba(180,180,255,0.20) inset;}
+.dot.z-water{box-shadow:0 0 0 2px rgba(120,200,255,0.20) inset;}
+
+/* Two-column helper */
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+@media (max-width: 900px){
+  .grid2{grid-template-columns:1fr;}
+}
+
+/* Compact items (used inside client profile) */
+.item.compact{padding:10px 12px;}
+.item.compact .itemTitle{font-size:14px;}
 .calToday{outline:2px solid rgba(124,255,178,.35)}
 
 .remDone{opacity:.55;text-decoration:line-through}
