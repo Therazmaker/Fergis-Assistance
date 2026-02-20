@@ -52,17 +52,20 @@ function zodiacFromDob(dob){
   }catch(e){ return ""; }
 }
 
-function findClientByBookingClientString(str){
+function findClientByBookingClientString(str, st = STATE){
   // Busca por handle (con o sin @) o por nombre
+  // Nota: durante normalizeState(), STATE aún puede no estar inicializado.
+  // Por eso aceptamos `st` (state candidato) y caemos a [] si no hay clientes.
+  const clients = (st && Array.isArray(st.clients)) ? st.clients : [];
   const q = (str||"").trim();
   if(!q) return null;
   const nh = normHandle(q);
-  let c = STATE.clients.find(x => normHandle(x.handle) === nh);
+  let c = clients.find(x => normHandle(x.handle) === nh);
   if(c) return c;
   const ql = q.toLowerCase();
-  c = STATE.clients.find(x => (x.name||"").toLowerCase() === ql);
+  c = clients.find(x => (x.name||"").toLowerCase() === ql);
   if(c) return c;
-  c = STATE.clients.find(x => ((x.name||"")+" "+(x.handle||"")).toLowerCase().includes(ql));
+  c = clients.find(x => ((x.name||"")+" "+(x.handle||"")).toLowerCase().includes(ql));
   return c || null;
 }
 
@@ -223,7 +226,7 @@ function normalizeState_(st){
     if(b.clientId) continue;
     const clientStr = (b.client || "").trim();
     if(!clientStr) continue;
-    const c = findClientByBookingClientString(clientStr);
+    const c = findClientByBookingClientString(clientStr, st);
     if(c) b.clientId = c.id;
   }
   for(const r of st.reminders){
