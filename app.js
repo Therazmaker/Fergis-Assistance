@@ -11,6 +11,12 @@ const DEFAULT_SETTINGS = {
   apiKey: ""                // opcional (si lo quieres validar en Apps Script)
 };
 
+// IMPORTANT:
+// `STATE` is referenced by helper functions declared near the top of this file.
+// Declare it here (without initialization) to avoid the Temporal Dead Zone error
+// "Cannot access 'STATE' before initialization".
+let STATE;
+
 const nowISO = () => new Date().toISOString();
 const todayKey = () => new Date().toISOString().slice(0,10);
 
@@ -623,7 +629,7 @@ async function syncNow(){
 
 
 // ---------- UI ----------
-let STATE = normalizeState_(loadState());
+STATE = normalizeState_(loadState());
 let SETTINGS = loadSettings();
 
 function $(sel){ return document.querySelector(sel); }
