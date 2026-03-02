@@ -84,6 +84,7 @@ body{
 .cardHead.compact{margin-bottom:8px}
 .cardTitle{font-weight:800}
 .cardSub{font-size:12px;color:var(--muted);margin-top:2px}
+.contentDateLine{font-size:12px;color:#f0d37a;margin-top:4px;font-weight:700}
 
 .list{display:flex;flex-direction:column;gap:8px}
 .compactList .item{padding:10px}
