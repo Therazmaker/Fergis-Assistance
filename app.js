@@ -415,10 +415,10 @@ function getClientForBooking_(b){
 }
 
 function seedPlanGirasolIfNeeded_(){
-  const currentWeek = weekIdISO(new Date());
-  if(STATE.planWeekId === currentWeek) return;
+  const hasPlanTasks = STATE.tasks.some((t) => t.category === "plan");
+  if(hasPlanTasks) return;
 
-  // Seed una vez por semana: Plan Girasol base
+  // Seed solo si todavía no existe un Plan Girasol
   const ws = weekStartMonday(new Date());
   const createdAt = nowISO();
 
@@ -463,7 +463,7 @@ function seedPlanGirasolIfNeeded_(){
     enqueueEvent("task_add", t);
   }
 
-  STATE.planWeekId = currentWeek;
+  STATE.planWeekId = weekIdISO(new Date());
   saveState();
 }
 
@@ -751,11 +751,11 @@ function deleteTask(taskId){
   render();
 }
 
-function movePlanTaskByOffset(dayKey, taskId, offset){
+function movePlanTaskByOffset(taskId, offset){
   const planIndexes = [];
   for(let i=0;i<STATE.tasks.length;i++){
     const task = STATE.tasks[i];
-    if(task.pinnedDay === dayKey && task.category === "plan") planIndexes.push(i);
+    if(task.category === "plan") planIndexes.push(i);
   }
 
   const relIndex = planIndexes.findIndex((idx) => STATE.tasks[idx].id === taskId);
@@ -968,7 +968,6 @@ function badgeForStatus(status){
 }
 
 function render(){
-  renderPlanDaySelect();
   renderPlan();
   renderContentTodo();
   renderSessionTaskSelect();
@@ -982,32 +981,10 @@ function render(){
   updateSyncUI();
 }
 
-function renderPlanDaySelect(){
-  const sel = $("#planDaySelect");
-  if(!sel) return;
-  const ws = weekStartMonday(new Date());
-  const today = todayKey();
-
-  const opts = [];
-  for(let i=0;i<7;i++){
-    const d = addDays(ws, i);
-    const key = dateKey(d);
-    const label = d.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric" });
-    const selected = (key === (sel.value || today)) ? "selected" : "";
-    opts.push(`<option value="${key}" ${selected}>${label}</option>`);
-  }
-  // If current value not in this week, default to today
-  sel.innerHTML = opts.join("");
-  if(!sel.value) sel.value = today;
-}
-
 function renderPlan(){
   const list = $("#planList");
-  const sel = $("#planDaySelect");
-  if(!list || !sel) return;
-
-  const dayKey = sel.value || todayKey();
-  const items = STATE.tasks.filter(t => t.pinnedDay === dayKey && (t.category === "plan"));
+  if(!list) return;
+  const items = STATE.tasks.filter(t => t.category === "plan");
 
   if(!items.length){
     list.innerHTML = `<div class="item">
@@ -1033,7 +1010,7 @@ function renderPlan(){
         </button>
         <div>
           <div class="itemTitle">${escapeHtml(t.title)}</div>
-          <div class="itemMeta">${done ? "Hecho ✅" : "Por hacer"} • ${t.pinnedDay}</div>
+          <div class="itemMeta">${done ? "Hecho ✅" : "Por hacer"}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1568,12 +1545,7 @@ function wire(){
   }
 
   $("#btnAddPlanTask").addEventListener("click", () => {
-    const day = $("#planDaySelect")?.value || todayKey();
-    openTaskModal_({ category: "plan", pinnedDay: day });
-  });
-
-  $("#planDaySelect").addEventListener("change", () => {
-    renderPlan();
+    openTaskModal_({ category: "plan" });
   });
 
   // Calendar navigation
@@ -1684,11 +1656,13 @@ function wire(){
           <input id="mTaskTitle" class="input" placeholder="Ej: 10 min de investigación (Luna en Piscis)" />
         </div>
 
+        ${isPlan ? "" : `
         <div class="row">
           <label class="label">Fecha</label>
           <input id="mTaskDay" type="date" class="input" value="${defDay}" />
           <div class="itemMeta">Puedes planear para otro día sin cargar el “hoy”.</div>
         </div>
+        `}
 
         <div class="row">
           <label class="label">Tipo</label>
@@ -1710,8 +1684,9 @@ function wire(){
     $("#mCancel").onclick = closeModal;
     $("#mOk").onclick = () => {
       const title = $("#mTaskTitle").value.trim();
-      const day = $("#mTaskDay").value || todayKey();
       const cat = $("#mTaskCat").value || "mission";
+      const dayInput = $("#mTaskDay");
+      const day = dayInput ? (dayInput.value || todayKey()) : todayKey();
 
       if(!title){ toast("Escribe un título."); return; }
 
@@ -1930,12 +1905,10 @@ function wire(){
     if(!btn) return;
     const act = btn.dataset.act;
     const id = btn.dataset.id;
-    const dayKey = $("#planDaySelect")?.value || todayKey();
-
     if(act==="planToggle") toggleTaskDone(id);
     if(act==="planDelete") deleteTask(id);
-    if(act==="planMoveUp") movePlanTaskByOffset(dayKey, id, -1);
-    if(act==="planMoveDown") movePlanTaskByOffset(dayKey, id, 1);
+    if(act==="planMoveUp") movePlanTaskByOffset(id, -1);
+    if(act==="planMoveDown") movePlanTaskByOffset(id, 1);
 
     if(act==="planEdit"){
       const t = STATE.tasks.find(x => x.id===id);
@@ -1947,10 +1920,6 @@ function wire(){
             <label class="label">Título</label>
             <input id="mEditTitle" class="input" value="${escapeAttr(t.title)}" />
           </div>
-          <div class="row">
-            <label class="label">Fecha</label>
-            <input id="mEditDay" type="date" class="input" value="${t.pinnedDay}" />
-          </div>
         `,
         `
           <button class="btn" id="mCancel">Cancelar</button>
@@ -1960,13 +1929,10 @@ function wire(){
       $("#mCancel").onclick = closeModal;
       $("#mSave").onclick = () => {
         const title = $("#mEditTitle").value.trim();
-        const day = $("#mEditDay").value || t.pinnedDay;
         if(!title){ toast("Título vacío."); return; }
         t.title = title;
-        t.pinnedDay = day;
-        enqueueEvent("task_update", { id: t.id, patch: { title, pinnedDay: day, category: t.category || "plan" } });
+        enqueueEvent("task_update", { id: t.id, patch: { title, category: t.category || "plan" } });
         saveState();
-        renderPlanDaySelect();
         render();
         closeModal();
       };
