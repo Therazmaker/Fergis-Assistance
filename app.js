@@ -142,9 +142,14 @@ const CONTENT_SECTIONS = [
   ["threads", "🌻 Threads"],
   ["postVideo", "🌻 Post / Video"]
 ];
-const CONTENT_STATUSES = ["borrador", "listo", "publicado"];
-
 function getTodayKey(){ return todayKey(); }
+
+function formatContentDateLabel(dayKey){
+  const d = new Date(`${dayKey}T00:00:00`);
+  const pretty = d.toLocaleDateString("es-AR", { weekday:"short", day:"2-digit", month:"short" });
+  const base = pretty.charAt(0).toUpperCase() + pretty.slice(1).replace(/\./g, "");
+  return dayKey === getTodayKey() ? `Hoy · ${base}` : base;
+}
 
 function defaultContentSections(){
   return { stories: [], entreDiosas: [], threads: [], postVideo: [] };
@@ -169,17 +174,9 @@ function ensureContentDay(dayKey){
 function archiveContentIfDayChanged(){
   const today = getTodayKey();
   const active = STATE.contentTodo.activeDate || today;
-  if(active === today){
-    ensureContentDay(today);
-    return false;
-  }
-  if(!STATE.contentTodo.historyOrder.includes(active)){
-    STATE.contentTodo.historyOrder.unshift(active);
-  }
-  STATE.contentTodo.activeDate = today;
   ensureContentDay(today);
-  saveState();
-  return true;
+  ensureContentDay(active);
+  return active !== today;
 }
 
 
@@ -478,7 +475,7 @@ function addContentItem(dayKey, sectionKey, title){
   const clean = String(title || "").trim();
   if(!clean) return null;
   const day = ensureContentDay(dayKey);
-  const item = { id: uid("ct"), title: clean, status: "borrador", done: false, doneAt: null, notes: "" };
+  const item = { id: uid("ct"), title: clean, done: false, doneAt: null, notes: "" };
   day.sections[sectionKey].unshift(item);
   day.updatedAt = Date.now();
   saveState();
@@ -502,7 +499,7 @@ function editContentItem(dayKey, sectionKey, itemId, patch={}){
   const item = day.sections[sectionKey].find(x => x.id === itemId);
   if(!item) return;
   if(typeof patch.title === "string") item.title = patch.title.trim() || item.title;
-  if(typeof patch.status === "string" && CONTENT_STATUSES.includes(patch.status)) item.status = patch.status;
+  if(typeof patch.notes === "string") item.notes = patch.notes.trim();
   day.updatedAt = Date.now();
   saveState();
   render();
@@ -546,7 +543,7 @@ function applyContentTemplate(mode){
   for(const [sectionKey] of CONTENT_SECTIONS){
     const rows = tpl[sectionKey] || [];
     for(const title of rows){
-      day.sections[sectionKey].push({ id: uid("ct"), title, status: "borrador", done: false, doneAt: null, notes: "" });
+      day.sections[sectionKey].push({ id: uid("ct"), title, done: false, doneAt: null, notes: "" });
     }
   }
   day.updatedAt = Date.now();
@@ -909,6 +906,9 @@ function renderContentTodo(){
   const list = $("#contentTodoList");
   if(!list) return;
 
+  const dateLabel = $("#contentDateLabel");
+  if(dateLabel) dateLabel.textContent = formatContentDateLabel(dayKey);
+
   const html = CONTENT_SECTIONS.map(([sectionKey, label]) => {
     const items = day.sections[sectionKey] || [];
     const itemRows = items.length ? items.map(item => {
@@ -919,7 +919,7 @@ function renderContentTodo(){
           <button class="btn ${doneMark}" data-act="contentToggle" data-section="${sectionKey}" data-id="${item.id}" title="Marcar hecho">${item.done ? "✓" : "○"}</button>
           <div>
             <div class="itemTitle">${escapeHtml(item.title)}</div>
-            <div class="itemMeta">${escapeHtml(item.status || "borrador")}${doneMeta}</div>
+            <div class="itemMeta">${item.notes ? `📝 ${escapeHtml(item.notes)}` : "Sin copy aún"}${doneMeta}</div>
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1373,6 +1373,33 @@ function wire(){
     toast("Día archivado 🌙");
   });
 
+  const contentDateBtn = $("#btnPickContentDate");
+  if(contentDateBtn){
+    contentDateBtn.addEventListener("click", () => {
+      openModal(
+        "Elegir fecha de contenido",
+        `
+          <div class="row">
+            <label class="label">Fecha</label>
+            <input id="mContentDay" type="date" class="input" value="${STATE.contentTodo.activeDate || getTodayKey()}" />
+          </div>
+        `,
+        `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Ir a fecha</button>`
+      );
+      $("#mCancel").onclick = closeModal;
+      $("#mSave").onclick = () => {
+        const selected = $("#mContentDay").value;
+        if(!selected){ toast("Elige una fecha"); return; }
+        STATE.contentTodo.activeDate = selected;
+        ensureContentDay(selected);
+        saveState();
+        renderContentTodo();
+        renderMetrics();
+        closeModal();
+      };
+    });
+  }
+
   $("#btnAddPlanTask").addEventListener("click", () => {
     const day = $("#planDaySelect")?.value || todayKey();
     openTaskModal_({ category: "plan", pinnedDay: day });
@@ -1548,10 +1575,8 @@ function wire(){
           </select>
         </div>
         <div class="row">
-          <label class="label">Estado</label>
-          <select id="mContentStatus" class="input">
-            ${CONTENT_STATUSES.map(st => `<option value="${st}" ${st===(itemRef?.status||"borrador")?"selected":""}>${st}</option>`).join("")}
-          </select>
+          <label class="label">Copy / Notas</label>
+          <textarea id="mContentNotes" class="input" rows="4" placeholder="Pega aquí el copy, CTA, hashtags o ideas.">${escapeHtml(itemRef?.notes || "")}</textarea>
         </div>
       `,
       `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">${isEdit ? "Guardar" : "Agregar"}</button>`
@@ -1560,20 +1585,20 @@ function wire(){
     $("#mSave").onclick = () => {
       const title = $("#mContentTitle").value.trim();
       const sec = $("#mContentSection").value;
-      const status = $("#mContentStatus").value;
+      const notes = $("#mContentNotes").value.trim();
       const dayKey = STATE.contentTodo.activeDate || getTodayKey();
       if(!title){ toast("Escribe un título"); return; }
       if(isEdit){
         if(sec !== sectionKey){
           deleteContentItem(dayKey, sectionKey, itemRef.id);
           const moved = addContentItem(dayKey, sec, title);
-          if(moved) editContentItem(dayKey, sec, moved.id, { status });
+          if(moved) editContentItem(dayKey, sec, moved.id, { notes });
         }else{
-          editContentItem(dayKey, sectionKey, itemRef.id, { title, status });
+          editContentItem(dayKey, sectionKey, itemRef.id, { title, notes });
         }
       }else{
         const added = addContentItem(dayKey, sec, title);
-        if(added) editContentItem(dayKey, sec, added.id, { status });
+        if(added) editContentItem(dayKey, sec, added.id, { notes });
       }
       closeModal();
     };
