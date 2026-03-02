@@ -513,6 +513,38 @@ function deleteContentItem(dayKey, sectionKey, itemId){
   render();
 }
 
+function moveContentItem(dayKey, fromSectionKey, toSectionKey, itemId, targetIndex=null){
+  const day = ensureContentDay(dayKey);
+  const fromItems = day.sections[fromSectionKey] || [];
+  const toItems = day.sections[toSectionKey] || [];
+  const fromIndex = fromItems.findIndex(x => x.id === itemId);
+  if(fromIndex < 0) return;
+
+  const [item] = fromItems.splice(fromIndex, 1);
+  if(!item) return;
+
+  let insertAt = Number.isInteger(targetIndex) ? targetIndex : toItems.length;
+  if(fromSectionKey === toSectionKey && fromIndex < insertAt) insertAt -= 1;
+  insertAt = Math.max(0, Math.min(insertAt, toItems.length));
+
+  toItems.splice(insertAt, 0, item);
+  day.sections[fromSectionKey] = fromItems;
+  day.sections[toSectionKey] = toItems;
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+}
+
+function moveContentItemByOffset(dayKey, sectionKey, itemId, offset){
+  const day = ensureContentDay(dayKey);
+  const items = day.sections[sectionKey] || [];
+  const fromIndex = items.findIndex(x => x.id === itemId);
+  if(fromIndex < 0) return;
+  const nextIndex = fromIndex + offset;
+  if(nextIndex < 0 || nextIndex >= items.length) return;
+  moveContentItem(dayKey, sectionKey, sectionKey, itemId, nextIndex);
+}
+
 function duplicateContentToTomorrow(dayKey, sectionKey, itemId){
   const day = ensureContentDay(dayKey);
   const item = day.sections[sectionKey].find(x => x.id === itemId);
@@ -923,6 +955,8 @@ function renderContentTodo(){
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn ghost" data-act="contentMoveUp" data-section="${sectionKey}" data-id="${item.id}" title="Subir">↑</button>
+          <button class="btn ghost" data-act="contentMoveDown" data-section="${sectionKey}" data-id="${item.id}" title="Bajar">↓</button>
           <button class="btn ghost" data-act="contentEdit" data-section="${sectionKey}" data-id="${item.id}">✏️</button>
           <button class="btn ghost" data-act="contentDelete" data-section="${sectionKey}" data-id="${item.id}">🗑</button>
           <button class="btn ghost" data-act="contentTomorrow" data-section="${sectionKey}" data-id="${item.id}">📌 Mañana</button>
@@ -1699,6 +1733,8 @@ function wire(){
     const day = ensureContentDay(dayKey);
     const item = (day.sections[section] || []).find(x => x.id === id);
     if(act==="contentToggle") toggleContentDone(dayKey, section, id);
+    if(act==="contentMoveUp") moveContentItemByOffset(dayKey, section, id, -1);
+    if(act==="contentMoveDown") moveContentItemByOffset(dayKey, section, id, 1);
     if(act==="contentDelete") deleteContentItem(dayKey, section, id);
     if(act==="contentTomorrow") duplicateContentToTomorrow(dayKey, section, id);
     if(act==="contentEdit" && item) openContentItemModal(section, item);
