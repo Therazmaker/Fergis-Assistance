@@ -72,12 +72,20 @@
         <section class="card">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Misiones del día (máx. 3)</div>
-              <div class="cardSub">Que hacer hoy, pequeño y realista.</div>
+              <div class="cardTitle">Contenido de hoy</div>
+              <div class="cardSub">Checklist de publicaciones. Lo de ayer se archiva solo.</div>
             </div>
-            <button class="btn" id="btnAddTask">+ Agregar</button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn" id="btnUseContentTemplate" title="Cargar plantilla rápida">Usar plantilla</button>
+              <button class="btn" id="btnAddContentItem">+ Agregar</button>
+            </div>
           </div>
-          <div id="tasksList" class="list"></div>
+          <div id="contentTodoList" class="list"></div>
+          <div class="divider"></div>
+          <div class="cardFootActions">
+            <div class="itemMeta" id="contentTodoSummary">0/0 completadas</div>
+            <button class="btn" id="btnArchiveContentDay">Archivar día</button>
+          </div>
         </section>
 
         <section class="card">
