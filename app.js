@@ -639,6 +639,29 @@ function deleteTask(taskId){
   render();
 }
 
+function movePlanTaskByOffset(dayKey, taskId, offset){
+  const planIndexes = [];
+  for(let i=0;i<STATE.tasks.length;i++){
+    const task = STATE.tasks[i];
+    if(task.pinnedDay === dayKey && task.category === "plan") planIndexes.push(i);
+  }
+
+  const relIndex = planIndexes.findIndex((idx) => STATE.tasks[idx].id === taskId);
+  if(relIndex < 0) return;
+
+  const targetRelIndex = relIndex + offset;
+  if(targetRelIndex < 0 || targetRelIndex >= planIndexes.length) return;
+
+  const fromAbsIndex = planIndexes[relIndex];
+  const toAbsIndex = planIndexes[targetRelIndex];
+  const [task] = STATE.tasks.splice(fromAbsIndex, 1);
+  if(!task) return;
+
+  STATE.tasks.splice(toAbsIndex, 0, task);
+  saveState();
+  renderPlan();
+}
+
 let ACTIVE_SESSION = null;
 let TIMER = { startMs: 0, tick: null };
 
@@ -887,8 +910,10 @@ function renderPlan(){
     return;
   }
 
-  list.innerHTML = items.map(t => {
+  list.innerHTML = items.map((t, idx) => {
     const done = !!t.doneAt;
+    const isFirst = idx === 0;
+    const isLast = idx === items.length - 1;
     return `<div class="item">
       <div class="itemLeft">
         <button class="btn ${done ? "primary":""}" data-act="planToggle" data-id="${t.id}" title="Marcar hecho">
@@ -900,6 +925,8 @@ function renderPlan(){
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn ghost" data-act="planMoveUp" data-id="${t.id}" title="Subir" ${isFirst ? "disabled" : ""}>↑</button>
+        <button class="btn ghost" data-act="planMoveDown" data-id="${t.id}" title="Bajar" ${isLast ? "disabled" : ""}>↓</button>
         <button class="btn ghost" data-act="planEdit" data-id="${t.id}" title="Editar">✎</button>
         <button class="btn ghost" data-act="planDelete" data-id="${t.id}" title="Eliminar">🗑</button>
       </div>
@@ -1789,9 +1816,12 @@ function wire(){
     if(!btn) return;
     const act = btn.dataset.act;
     const id = btn.dataset.id;
+    const dayKey = $("#planDaySelect")?.value || todayKey();
 
     if(act==="planToggle") toggleTaskDone(id);
     if(act==="planDelete") deleteTask(id);
+    if(act==="planMoveUp") movePlanTaskByOffset(dayKey, id, -1);
+    if(act==="planMoveDown") movePlanTaskByOffset(dayKey, id, 1);
 
     if(act==="planEdit"){
       const t = STATE.tasks.find(x => x.id===id);
