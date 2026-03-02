@@ -203,6 +203,17 @@ body{
 .contentAccordion summary{cursor:pointer;font-weight:700;list-style:none}
 .contentAccordion summary::-webkit-details-marker{display:none}
 .contentAccordion .list{margin-top:8px}
+.contentRow{cursor:grab}
+.contentRow.dragging{opacity:.45}
+.dragGrip{
+  color:var(--muted);
+  letter-spacing:-1px;
+  line-height:1;
+  margin-top:8px;
+  user-select:none;
+}
+
+
 .footer{
   width:min(1100px, 96vw);
   margin: 0 auto 16px;
