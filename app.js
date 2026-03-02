@@ -136,6 +136,52 @@ function parseInputDateTimeLocal(val){
   return d.toISOString();
 }
 
+const CONTENT_SECTIONS = [
+  ["stories", "🌻 Stories"],
+  ["entreDiosas", "🌻 Entre Diosas"],
+  ["threads", "🌻 Threads"],
+  ["postVideo", "🌻 Post / Video"]
+];
+const CONTENT_STATUSES = ["borrador", "listo", "publicado"];
+
+function getTodayKey(){ return todayKey(); }
+
+function defaultContentSections(){
+  return { stories: [], entreDiosas: [], threads: [], postVideo: [] };
+}
+
+function ensureContentDay(dayKey){
+  if(!STATE.contentTodo.days[dayKey]){
+    STATE.contentTodo.days[dayKey] = {
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      sections: defaultContentSections()
+    };
+  }
+  const day = STATE.contentTodo.days[dayKey];
+  day.sections = day.sections || defaultContentSections();
+  for(const [key] of CONTENT_SECTIONS){
+    day.sections[key] = Array.isArray(day.sections[key]) ? day.sections[key] : [];
+  }
+  return day;
+}
+
+function archiveContentIfDayChanged(){
+  const today = getTodayKey();
+  const active = STATE.contentTodo.activeDate || today;
+  if(active === today){
+    ensureContentDay(today);
+    return false;
+  }
+  if(!STATE.contentTodo.historyOrder.includes(active)){
+    STATE.contentTodo.historyOrder.unshift(active);
+  }
+  STATE.contentTodo.activeDate = today;
+  ensureContentDay(today);
+  saveState();
+  return true;
+}
+
 
 function uid(prefix="id"){
   return `${prefix}_${crypto.randomUUID?.() || (Date.now()+"_"+Math.random().toString(16).slice(2))}`;
@@ -158,7 +204,12 @@ function loadState(){
     ideas: [],
     eventQueue: [],  // para sync incremental
     planWeekId: null,
-    calMonth: null
+    calMonth: null,
+    contentTodo: {
+      activeDate: todayKey(),
+      days: {},
+      historyOrder: []
+    }
   };
 }
 function saveState(){
@@ -189,6 +240,11 @@ function normalizeState_(st){
   st.eventQueue = Array.isArray(st.eventQueue) ? st.eventQueue : [];
   st.planWeekId = st.planWeekId || null;
   st.calMonth = st.calMonth || null;
+
+  st.contentTodo = st.contentTodo || {};
+  st.contentTodo.activeDate = st.contentTodo.activeDate || todayKey();
+  st.contentTodo.days = st.contentTodo.days && typeof st.contentTodo.days === "object" ? st.contentTodo.days : {};
+  st.contentTodo.historyOrder = Array.isArray(st.contentTodo.historyOrder) ? st.contentTodo.historyOrder : [];
 
   // Back-compat: tasks sin category -> mission
   for(const t of st.tasks){
@@ -416,6 +472,96 @@ function makeTask_(title, opts={}){
     notes: opts.notes || "",
     category: opts.category || "mission" // mission | plan
   };
+}
+
+function addContentItem(dayKey, sectionKey, title){
+  const clean = String(title || "").trim();
+  if(!clean) return null;
+  const day = ensureContentDay(dayKey);
+  const item = { id: uid("ct"), title: clean, status: "borrador", done: false, doneAt: null, notes: "" };
+  day.sections[sectionKey].unshift(item);
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+  return item;
+}
+
+function toggleContentDone(dayKey, sectionKey, itemId){
+  const day = ensureContentDay(dayKey);
+  const item = day.sections[sectionKey].find(x => x.id === itemId);
+  if(!item) return;
+  item.done = !item.done;
+  item.doneAt = item.done ? Date.now() : null;
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+}
+
+function editContentItem(dayKey, sectionKey, itemId, patch={}){
+  const day = ensureContentDay(dayKey);
+  const item = day.sections[sectionKey].find(x => x.id === itemId);
+  if(!item) return;
+  if(typeof patch.title === "string") item.title = patch.title.trim() || item.title;
+  if(typeof patch.status === "string" && CONTENT_STATUSES.includes(patch.status)) item.status = patch.status;
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+}
+
+function deleteContentItem(dayKey, sectionKey, itemId){
+  const day = ensureContentDay(dayKey);
+  day.sections[sectionKey] = day.sections[sectionKey].filter(x => x.id !== itemId);
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+}
+
+function duplicateContentToTomorrow(dayKey, sectionKey, itemId){
+  const day = ensureContentDay(dayKey);
+  const item = day.sections[sectionKey].find(x => x.id === itemId);
+  if(!item) return;
+  const tomorrow = dateKey(addDays(new Date(dayKey+"T00:00:00"), 1));
+  addContentItem(tomorrow, sectionKey, item.title);
+  toast("Duplicado para mañana 📌");
+}
+
+function applyContentTemplate(mode){
+  const dayKey = STATE.contentTodo.activeDate || getTodayKey();
+  const day = ensureContentDay(dayKey);
+  const templates = {
+    light: {
+      stories: ["Story: check-in emocional", "Story: CTA suave"],
+      entreDiosas: ["Pregunta a la comunidad"],
+      threads: ["Thread corto del día"],
+      postVideo: []
+    },
+    full: {
+      stories: ["Lo primero que sentí al abrir los ojos hoy fue...", "Marte entra a Piscis...", "La pregunta que este cielo te hace...", "Ofreciendo mis servicios..."],
+      entreDiosas: ["Mis diosas girasoles...", "Pregunta a la comunidad", "Recordatorio eclipse"],
+      threads: ["Soltar el control..."],
+      postVideo: ["Idea: No actuar desde el debería", "Copy: Marte en Piscis..."]
+    }
+  };
+  const tpl = templates[mode] || templates.light;
+  for(const [sectionKey] of CONTENT_SECTIONS){
+    const rows = tpl[sectionKey] || [];
+    for(const title of rows){
+      day.sections[sectionKey].push({ id: uid("ct"), title, status: "borrador", done: false, doneAt: null, notes: "" });
+    }
+  }
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+}
+
+function archiveActiveContentDay(){
+  const key = STATE.contentTodo.activeDate || getTodayKey();
+  if(!STATE.contentTodo.historyOrder.includes(key)) STATE.contentTodo.historyOrder.unshift(key);
+  const next = getTodayKey();
+  STATE.contentTodo.activeDate = next;
+  ensureContentDay(next);
+  saveState();
+  render();
 }
 
 
@@ -669,7 +815,7 @@ function badgeForStatus(status){
 function render(){
   renderPlanDaySelect();
   renderPlan();
-  renderTasks();
+  renderContentTodo();
   renderSessionTaskSelect();
   renderSessions();
   renderCalendar();
@@ -748,47 +894,54 @@ function renderMetrics(){
   $("#mActiveToday").textContent = totalSec ? formatMin(totalSec) : "0m";
   $("#mSessionsToday").textContent = String(sessionsToday.length);
 
-  const tasksToday = STATE.tasks.filter(t => t.pinnedDay === day && (t.category||"mission")!=="plan").slice(0,3);
-  const pendingTasks = tasksToday.filter(t => !t.doneAt).length;
+  const contentDay = ensureContentDay(STATE.contentTodo.activeDate || day);
+  const contentPending = CONTENT_SECTIONS
+    .flatMap(([k]) => contentDay.sections[k] || [])
+    .filter(x => !x.done).length;
   const pendingRem = STATE.reminders.filter(r => !r.doneAt).length;
-  $("#mPendingTasks").textContent = String(pendingTasks + pendingRem);
+  $("#mPendingTasks").textContent = String(contentPending + pendingRem);
 }
 
-function renderTasks(){
-  const day = todayKey();
-  const list = $("#tasksList");
-  const missionsToday = STATE.tasks
-    .filter(t => t.pinnedDay === day && (t.category || "mission") !== "plan")
-    .slice(0,3);
+function renderContentTodo(){
+  archiveContentIfDayChanged();
+  const dayKey = STATE.contentTodo.activeDate || getTodayKey();
+  const day = ensureContentDay(dayKey);
+  const list = $("#contentTodoList");
+  if(!list) return;
 
-  if(!missionsToday.length){
-    list.innerHTML = `<div class="item"><div class="itemLeft">
-      <div>
-        <div class="itemTitle">Sin misiones todavía</div>
-        <div class="itemMeta">Agrega 1 o 2 cosas pequeñas. Máximo 3. 🧩</div>
-      </div></div>
-      <div><span class="pill">Tip: 5-10 min</span></div>
-    </div>`;
-    return;
-  }
-
-  list.innerHTML = missionsToday.map(t => {
-    const done = !!t.doneAt;
-    return `<div class="item">
-      <div class="itemLeft">
-        <button class="btn ${done ? "primary":""}" data-act="taskToggle" data-id="${t.id}" title="Marcar hecho">
-          ${done ? "✓":"○"}
-        </button>
-        <div>
-          <div class="itemTitle">${escapeHtml(t.title)}</div>
-          <div class="itemMeta">${done ? "Hecho ✅" : "Pendiente"} • ${new Date(t.createdAt).toLocaleString()}</div>
+  const html = CONTENT_SECTIONS.map(([sectionKey, label]) => {
+    const items = day.sections[sectionKey] || [];
+    const itemRows = items.length ? items.map(item => {
+      const doneMark = item.done ? "primary" : "";
+      const doneMeta = item.doneAt ? ` • Publicado a las ${new Date(item.doneAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}` : "";
+      return `<div class="item compact">
+        <div class="itemLeft">
+          <button class="btn ${doneMark}" data-act="contentToggle" data-section="${sectionKey}" data-id="${item.id}" title="Marcar hecho">${item.done ? "✓" : "○"}</button>
+          <div>
+            <div class="itemTitle">${escapeHtml(item.title)}</div>
+            <div class="itemMeta">${escapeHtml(item.status || "borrador")}${doneMeta}</div>
+          </div>
         </div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <button class="btn ghost" data-act="taskDelete" data-id="${t.id}" title="Eliminar">🗑</button>
-      </div>
-    </div>`;
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn ghost" data-act="contentEdit" data-section="${sectionKey}" data-id="${item.id}">✏️</button>
+          <button class="btn ghost" data-act="contentDelete" data-section="${sectionKey}" data-id="${item.id}">🗑</button>
+          <button class="btn ghost" data-act="contentTomorrow" data-section="${sectionKey}" data-id="${item.id}">📌 Mañana</button>
+        </div>
+      </div>`;
+    }).join("") : `<div class="item compact"><div class="itemMeta">Sin items todavía.</div></div>`;
+
+    return `<details class="contentAccordion" open>
+      <summary>${label} (${items.length})</summary>
+      <div class="list">${itemRows}</div>
+    </details>`;
   }).join("");
+
+  list.innerHTML = html;
+
+  const allItems = CONTENT_SECTIONS.flatMap(([k]) => day.sections[k] || []);
+  const doneCount = allItems.filter(x => x.done).length;
+  const summary = $("#contentTodoSummary");
+  if(summary) summary.textContent = `${doneCount}/${allItems.length} completadas`;
 }
 
 function renderSessionTaskSelect(){
@@ -1200,8 +1353,24 @@ function toast(msg){
 }
 
 function wire(){
-  $("#btnAddTask").addEventListener("click", () => {
-    openTaskModal_({ category: "mission", pinnedDay: todayKey() });
+  $("#btnAddContentItem").addEventListener("click", () => {
+    openContentItemModal();
+  });
+
+  $("#btnUseContentTemplate").addEventListener("click", () => {
+    openModal(
+      "Usar plantilla",
+      `<div class="itemMeta">Elige la intensidad para hoy.</div>`,
+      `<button class="btn" id="mLight">Plantilla 2/3/4</button><button class="btn primary" id="mFull">Plantilla Full</button><button class="btn" id="mCancel">Cancelar</button>`
+    );
+    $("#mLight").onclick = () => { applyContentTemplate("light"); closeModal(); };
+    $("#mFull").onclick = () => { applyContentTemplate("full"); closeModal(); };
+    $("#mCancel").onclick = closeModal;
+  });
+
+  $("#btnArchiveContentDay").addEventListener("click", () => {
+    archiveActiveContentDay();
+    toast("Día archivado 🌙");
   });
 
   $("#btnAddPlanTask").addEventListener("click", () => {
@@ -1362,6 +1531,54 @@ function wire(){
     };
   }
 
+
+  function openContentItemModal(sectionKey="stories", itemRef=null){
+    const isEdit = !!itemRef;
+    openModal(
+      isEdit ? "Editar contenido" : "Agregar contenido",
+      `
+        <div class="row">
+          <label class="label">Título corto</label>
+          <input id="mContentTitle" class="input" value="${escapeAttr(itemRef?.title || "")}" placeholder="Ej: Marte entra a Piscis..." />
+        </div>
+        <div class="row">
+          <label class="label">Sección</label>
+          <select id="mContentSection" class="input">
+            ${CONTENT_SECTIONS.map(([k,l]) => `<option value="${k}" ${k===sectionKey?"selected":""}>${l}</option>`).join("")}
+          </select>
+        </div>
+        <div class="row">
+          <label class="label">Estado</label>
+          <select id="mContentStatus" class="input">
+            ${CONTENT_STATUSES.map(st => `<option value="${st}" ${st===(itemRef?.status||"borrador")?"selected":""}>${st}</option>`).join("")}
+          </select>
+        </div>
+      `,
+      `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">${isEdit ? "Guardar" : "Agregar"}</button>`
+    );
+    $("#mCancel").onclick = closeModal;
+    $("#mSave").onclick = () => {
+      const title = $("#mContentTitle").value.trim();
+      const sec = $("#mContentSection").value;
+      const status = $("#mContentStatus").value;
+      const dayKey = STATE.contentTodo.activeDate || getTodayKey();
+      if(!title){ toast("Escribe un título"); return; }
+      if(isEdit){
+        if(sec !== sectionKey){
+          deleteContentItem(dayKey, sectionKey, itemRef.id);
+          const moved = addContentItem(dayKey, sec, title);
+          if(moved) editContentItem(dayKey, sec, moved.id, { status });
+        }else{
+          editContentItem(dayKey, sectionKey, itemRef.id, { title, status });
+        }
+      }else{
+        const added = addContentItem(dayKey, sec, title);
+        if(added) editContentItem(dayKey, sec, added.id, { status });
+      }
+      closeModal();
+    };
+  }
+
   $("#btnStartSession").addEventListener("click", () => {
     const taskId = $("#sessionTaskSelect").value || null;
     const note = $("#sessionNote").value || "";
@@ -1447,13 +1664,19 @@ function wire(){
     }
   });
 
-  $("#tasksList").addEventListener("click", (e) => {
+  $("#contentTodoList").addEventListener("click", (e) => {
     const btn = e.target.closest("button[data-act]");
     if(!btn) return;
     const act = btn.dataset.act;
     const id = btn.dataset.id;
-    if(act==="taskToggle") toggleTaskDone(id);
-    if(act==="taskDelete") deleteTask(id);
+    const section = btn.dataset.section;
+    const dayKey = STATE.contentTodo.activeDate || getTodayKey();
+    const day = ensureContentDay(dayKey);
+    const item = (day.sections[section] || []).find(x => x.id === id);
+    if(act==="contentToggle") toggleContentDone(dayKey, section, id);
+    if(act==="contentDelete") deleteContentItem(dayKey, section, id);
+    if(act==="contentTomorrow") duplicateContentToTomorrow(dayKey, section, id);
+    if(act==="contentEdit" && item) openContentItemModal(section, item);
   });
 
   $("#planList").addEventListener("click", (e) => {

@@ -197,6 +197,13 @@ body{
 
 .divider{height:1px;background:var(--line);margin:14px 0}
 
+.cardFootActions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.contentAccordion{border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:rgba(255,255,255,.02)}
+.contentAccordion summary{cursor:pointer;font-weight:700;list-style:none}
+.contentAccordion summary::-webkit-details-marker{display:none}
+.contentAccordion .list{margin-top:8px}
+
+
 .footer{
   width:min(1100px, 96vw);
   margin: 0 auto 16px;
