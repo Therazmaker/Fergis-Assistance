@@ -4,6 +4,10 @@
 
 const LS_KEY = "fa_v01_state";
 const SETTINGS_KEY = "fa_v01_settings";
+const DB_NAME = "fergis_assistant_db";
+const DB_VERSION = 1;
+const STATE_STORE = "state_snapshots";
+const STATE_SNAPSHOT_ID = "main";
 
 const DEFAULT_SETTINGS = {
   syncEnabled: false,
@@ -17,6 +21,7 @@ const DEFAULT_SETTINGS = {
 // "Cannot access 'STATE' before initialization".
 let STATE;
 let CONTENT_DRAG = null;
+let IDB_PROMISE = null;
 
 const nowISO = () => new Date().toISOString();
 const todayKey = () => new Date().toISOString().slice(0,10);
@@ -203,6 +208,7 @@ function loadState(){
     eventQueue: [],  // para sync incremental
     planWeekId: null,
     calMonth: null,
+    updatedAtMs: Date.now(),
     contentTodo: {
       activeDate: todayKey(),
       days: {},
@@ -210,8 +216,94 @@ function loadState(){
     }
   };
 }
+function openStateDB(){
+  if(!("indexedDB" in window)) return Promise.resolve(null);
+  if(IDB_PROMISE) return IDB_PROMISE;
+
+  IDB_PROMISE = new Promise((resolve) => {
+    try{
+      const req = indexedDB.open(DB_NAME, DB_VERSION);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if(!db.objectStoreNames.contains(STATE_STORE)){
+          db.createObjectStore(STATE_STORE, { keyPath: "id" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => {
+        console.warn("IndexedDB open error", req.error);
+        resolve(null);
+      };
+    }catch(e){
+      console.warn("IndexedDB unavailable", e);
+      resolve(null);
+    }
+  });
+
+  return IDB_PROMISE;
+}
+
+async function saveStateSnapshotToIDB(snapshot){
+  const db = await openStateDB();
+  if(!db) return;
+
+  await new Promise((resolve) => {
+    try{
+      const tx = db.transaction(STATE_STORE, "readwrite");
+      tx.objectStore(STATE_STORE).put({ id: STATE_SNAPSHOT_ID, snapshot, savedAt: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => {
+        console.warn("IndexedDB save error", tx.error);
+        resolve();
+      };
+    }catch(e){
+      console.warn("IndexedDB tx save error", e);
+      resolve();
+    }
+  });
+}
+
+async function recoverStateFromIDB(){
+  const db = await openStateDB();
+  if(!db) return;
+
+  const row = await new Promise((resolve) => {
+    try{
+      const tx = db.transaction(STATE_STORE, "readonly");
+      const req = tx.objectStore(STATE_STORE).get(STATE_SNAPSHOT_ID);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => {
+        console.warn("IndexedDB read error", req.error);
+        resolve(null);
+      };
+    }catch(e){
+      console.warn("IndexedDB tx read error", e);
+      resolve(null);
+    }
+  });
+
+  if(!row?.snapshot) return;
+
+  const snapshot = normalizeState_(row.snapshot);
+  const currentUpdated = Number(STATE.updatedAtMs || 0);
+  const backupUpdated = Number(snapshot.updatedAtMs || 0);
+  if(backupUpdated <= currentUpdated) return;
+
+  STATE = snapshot;
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  }catch(e){
+    console.warn("LocalStorage restore write error", e);
+  }
+  render();
+  toast("Recuperé una copia guardada localmente 💾");
+}
+
 function saveState(){
-  localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  STATE.updatedAtMs = Date.now();
+  const snapshot = JSON.stringify(STATE);
+  localStorage.setItem(LS_KEY, snapshot);
+  saveStateSnapshotToIDB(JSON.parse(snapshot));
 }
 
 function loadSettings(){
@@ -238,6 +330,7 @@ function normalizeState_(st){
   st.eventQueue = Array.isArray(st.eventQueue) ? st.eventQueue : [];
   st.planWeekId = st.planWeekId || null;
   st.calMonth = st.calMonth || null;
+  st.updatedAtMs = Number(st.updatedAtMs || Date.now());
 
   st.contentTodo = st.contentTodo || {};
   st.contentTodo.activeDate = st.contentTodo.activeDate || todayKey();
@@ -2615,4 +2708,7 @@ if("serviceWorker" in navigator){
 
 seedPlanGirasolIfNeeded_();
 wire();
+recoverStateFromIDB();
 render();
+
+window.addEventListener("pagehide", () => saveState());
