@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
 // Declare it here (without initialization) to avoid the Temporal Dead Zone error
 // "Cannot access 'STATE' before initialization".
 let STATE;
+let CONTENT_DRAG = null;
 
 const nowISO = () => new Date().toISOString();
 const todayKey = () => new Date().toISOString().slice(0,10);
@@ -513,6 +514,28 @@ function deleteContentItem(dayKey, sectionKey, itemId){
   render();
 }
 
+function moveContentItem(dayKey, fromSectionKey, toSectionKey, itemId, targetIndex=null){
+  const day = ensureContentDay(dayKey);
+  const fromItems = day.sections[fromSectionKey] || [];
+  const toItems = day.sections[toSectionKey] || [];
+  const fromIndex = fromItems.findIndex(x => x.id === itemId);
+  if(fromIndex < 0) return;
+
+  const [item] = fromItems.splice(fromIndex, 1);
+  if(!item) return;
+
+  let insertAt = Number.isInteger(targetIndex) ? targetIndex : toItems.length;
+  if(fromSectionKey === toSectionKey && fromIndex < insertAt) insertAt -= 1;
+  insertAt = Math.max(0, Math.min(insertAt, toItems.length));
+
+  toItems.splice(insertAt, 0, item);
+  day.sections[fromSectionKey] = fromItems;
+  day.sections[toSectionKey] = toItems;
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+}
+
 function duplicateContentToTomorrow(dayKey, sectionKey, itemId){
   const day = ensureContentDay(dayKey);
   const item = day.sections[sectionKey].find(x => x.id === itemId);
@@ -914,8 +937,9 @@ function renderContentTodo(){
     const itemRows = items.length ? items.map(item => {
       const doneMark = item.done ? "primary" : "";
       const doneMeta = item.doneAt ? ` • Publicado a las ${new Date(item.doneAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}` : "";
-      return `<div class="item compact">
+      return `<div class="item compact contentRow" draggable="true" data-content-id="${item.id}" data-content-section="${sectionKey}">
         <div class="itemLeft">
+          <span class="dragGrip" title="Arrastrar para mover">⋮⋮</span>
           <button class="btn ${doneMark}" data-act="contentToggle" data-section="${sectionKey}" data-id="${item.id}" title="Marcar hecho">${item.done ? "✓" : "○"}</button>
           <div>
             <div class="itemTitle">${escapeHtml(item.title)}</div>
@@ -932,7 +956,7 @@ function renderContentTodo(){
 
     return `<details class="contentAccordion" open>
       <summary>${label} (${items.length})</summary>
-      <div class="list">${itemRows}</div>
+      <div class="list" data-content-section-list="${sectionKey}">${itemRows}</div>
     </details>`;
   }).join("");
 
@@ -1702,6 +1726,58 @@ function wire(){
     if(act==="contentDelete") deleteContentItem(dayKey, section, id);
     if(act==="contentTomorrow") duplicateContentToTomorrow(dayKey, section, id);
     if(act==="contentEdit" && item) openContentItemModal(section, item);
+  });
+
+  $("#contentTodoList").addEventListener("dragstart", (e) => {
+    const row = e.target.closest(".contentRow");
+    if(!row) return;
+    CONTENT_DRAG = {
+      id: row.dataset.contentId,
+      fromSection: row.dataset.contentSection
+    };
+    row.classList.add("dragging");
+    if(e.dataTransfer){
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", CONTENT_DRAG.id || "");
+    }
+  });
+
+  $("#contentTodoList").addEventListener("dragover", (e) => {
+    if(!CONTENT_DRAG) return;
+    const sectionList = e.target.closest("[data-content-section-list]");
+    if(!sectionList) return;
+    e.preventDefault();
+    if(e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  });
+
+  $("#contentTodoList").addEventListener("drop", (e) => {
+    if(!CONTENT_DRAG) return;
+    const sectionList = e.target.closest("[data-content-section-list]");
+    if(!sectionList) return;
+    e.preventDefault();
+
+    const toSection = sectionList.dataset.contentSectionList;
+    const targetRow = e.target.closest(".contentRow");
+    let targetIndex = null;
+
+    if(targetRow && targetRow.dataset.contentSection === toSection){
+      const sectionRows = Array.from(sectionList.querySelectorAll(".contentRow"));
+      const rowIndex = sectionRows.findIndex(row => row.dataset.contentId === targetRow.dataset.contentId);
+      if(rowIndex >= 0){
+        const rect = targetRow.getBoundingClientRect();
+        const insertAfter = e.clientY > rect.top + rect.height / 2;
+        targetIndex = rowIndex + (insertAfter ? 1 : 0);
+      }
+    }
+
+    const dayKey = STATE.contentTodo.activeDate || getTodayKey();
+    moveContentItem(dayKey, CONTENT_DRAG.fromSection, toSection, CONTENT_DRAG.id, targetIndex);
+    CONTENT_DRAG = null;
+  });
+
+  $("#contentTodoList").addEventListener("dragend", () => {
+    document.querySelectorAll(".contentRow.dragging").forEach((el) => el.classList.remove("dragging"));
+    CONTENT_DRAG = null;
   });
 
   $("#planList").addEventListener("click", (e) => {
