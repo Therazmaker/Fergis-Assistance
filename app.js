@@ -536,6 +536,25 @@ function moveContentItem(dayKey, fromSectionKey, toSectionKey, itemId, targetInd
   render();
 }
 
+function moveContentItemByOffset(dayKey, sectionKey, itemId, offset){
+  const day = ensureContentDay(dayKey);
+  const items = day.sections[sectionKey] || [];
+  const fromIndex = items.findIndex((x) => x.id === itemId);
+  if(fromIndex < 0) return;
+
+  const toIndex = fromIndex + offset;
+  if(toIndex < 0 || toIndex >= items.length) return;
+
+  const [item] = items.splice(fromIndex, 1);
+  if(!item) return;
+  items.splice(toIndex, 0, item);
+
+  day.sections[sectionKey] = items;
+  day.updatedAt = Date.now();
+  saveState();
+  render();
+}
+
 function duplicateContentToTomorrow(dayKey, sectionKey, itemId){
   const day = ensureContentDay(dayKey);
   const item = day.sections[sectionKey].find(x => x.id === itemId);
@@ -961,9 +980,11 @@ function renderContentTodo(){
 
   const html = CONTENT_SECTIONS.map(([sectionKey, label]) => {
     const items = day.sections[sectionKey] || [];
-    const itemRows = items.length ? items.map(item => {
+    const itemRows = items.length ? items.map((item, idx) => {
       const doneMark = item.done ? "primary" : "";
       const doneMeta = item.doneAt ? ` • Publicado a las ${new Date(item.doneAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" })}` : "";
+      const isFirst = idx === 0;
+      const isLast = idx === items.length - 1;
       return `<div class="item compact contentRow" draggable="true" data-content-id="${item.id}" data-content-section="${sectionKey}">
         <div class="itemLeft">
           <span class="dragGrip" title="Arrastrar para mover">⋮⋮</span>
@@ -974,8 +995,8 @@ function renderContentTodo(){
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-          <button class="btn ghost" data-act="contentMoveUp" data-section="${sectionKey}" data-id="${item.id}" title="Subir">↑</button>
-          <button class="btn ghost" data-act="contentMoveDown" data-section="${sectionKey}" data-id="${item.id}" title="Bajar">↓</button>
+          <button class="btn ghost" data-act="contentMoveUp" data-section="${sectionKey}" data-id="${item.id}" title="Subir" ${isFirst ? "disabled" : ""}>↑</button>
+          <button class="btn ghost" data-act="contentMoveDown" data-section="${sectionKey}" data-id="${item.id}" title="Bajar" ${isLast ? "disabled" : ""}>↓</button>
           <button class="btn ghost" data-act="contentEdit" data-section="${sectionKey}" data-id="${item.id}">✏️</button>
           <button class="btn ghost" data-act="contentDelete" data-section="${sectionKey}" data-id="${item.id}">🗑</button>
           <button class="btn ghost" data-act="contentTomorrow" data-section="${sectionKey}" data-id="${item.id}">📌 Mañana</button>
