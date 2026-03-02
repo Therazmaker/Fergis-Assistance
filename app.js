@@ -947,6 +947,8 @@ function renderContentTodo(){
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button class="btn ghost" data-act="contentMoveUp" data-section="${sectionKey}" data-id="${item.id}" title="Subir">↑</button>
+          <button class="btn ghost" data-act="contentMoveDown" data-section="${sectionKey}" data-id="${item.id}" title="Bajar">↓</button>
           <button class="btn ghost" data-act="contentEdit" data-section="${sectionKey}" data-id="${item.id}">✏️</button>
           <button class="btn ghost" data-act="contentDelete" data-section="${sectionKey}" data-id="${item.id}">🗑</button>
           <button class="btn ghost" data-act="contentTomorrow" data-section="${sectionKey}" data-id="${item.id}">📌 Mañana</button>
@@ -1723,6 +1725,8 @@ function wire(){
     const day = ensureContentDay(dayKey);
     const item = (day.sections[section] || []).find(x => x.id === id);
     if(act==="contentToggle") toggleContentDone(dayKey, section, id);
+    if(act==="contentMoveUp") moveContentItemByOffset(dayKey, section, id, -1);
+    if(act==="contentMoveDown") moveContentItemByOffset(dayKey, section, id, 1);
     if(act==="contentDelete") deleteContentItem(dayKey, section, id);
     if(act==="contentTomorrow") duplicateContentToTomorrow(dayKey, section, id);
     if(act==="contentEdit" && item) openContentItemModal(section, item);
