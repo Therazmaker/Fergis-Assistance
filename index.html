@@ -50,8 +50,15 @@
         </div>
       </section>
 
-      <section class="grid">
+      <section class="tabsNav" id="tabsNav">
+        <button class="tabBtn active" data-tab="plan">Plan Girasol</button>
+        <button class="tabBtn" data-tab="contenido">Contenido de hoy</button>
+        <button class="tabBtn" data-tab="clientes">Clientes y Calendario</button>
+        <button class="tabBtn" data-tab="investigacion">Investigación</button>
+        <button class="tabBtn" data-tab="suscripcion">Suscripción - Diosa en Guía</button>
+      </section>
 
+      <section class="grid tabPanel active" data-panel="plan">
         <section class="card">
           <div class="cardHead">
             <div>
@@ -66,27 +73,6 @@
             🌻 Objetivo: presencia diaria → contenido 3x/semana → CTA → seguimiento.
           </div>
           <div id="planList" class="list"></div>
-        </section>
-
-        <section class="card">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Contenido de hoy</div>
-              <div class="cardSub">Checklist de publicaciones. Lo de ayer se archiva solo.</div>
-              <div class="contentDateLine" id="contentDateLabel">Hoy</div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn" id="btnPickContentDate" title="Cambiar fecha de contenido">📅</button>
-              <button class="btn" id="btnUseContentTemplate" title="Cargar plantilla rápida">Usar plantilla</button>
-              <button class="btn" id="btnAddContentItem">+ Agregar</button>
-            </div>
-          </div>
-          <div id="contentTodoList" class="list"></div>
-          <div class="divider"></div>
-          <div class="cardFootActions">
-            <div class="itemMeta" id="contentTodoSummary">0/0 completadas</div>
-            <button class="btn" id="btnArchiveContentDay">Archivar día</button>
-          </div>
         </section>
 
         <section class="card">
@@ -130,7 +116,32 @@
           </div>
           <div id="sessionsList" class="list compactList"></div>
         </section>
+      </section>
 
+      <section class="grid tabPanel" data-panel="contenido">
+        <section class="card fullSpan">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Contenido de hoy</div>
+              <div class="cardSub">Checklist de publicaciones. Lo de ayer se archiva solo.</div>
+              <div class="contentDateLine" id="contentDateLabel">Hoy</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn" id="btnPickContentDate" title="Cambiar fecha de contenido">📅</button>
+              <button class="btn" id="btnUseContentTemplate" title="Cargar plantilla rápida">Usar plantilla</button>
+              <button class="btn" id="btnAddContentItem">+ Agregar</button>
+            </div>
+          </div>
+          <div id="contentTodoList" class="list"></div>
+          <div class="divider"></div>
+          <div class="cardFootActions">
+            <div class="itemMeta" id="contentTodoSummary">0/0 completadas</div>
+            <button class="btn" id="btnArchiveContentDay">Archivar día</button>
+          </div>
+        </section>
+      </section>
+
+      <section class="grid tabPanel" data-panel="clientes">
         <section class="card">
           <div class="cardHead">
             <div>
@@ -157,17 +168,6 @@
         <section class="card">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Ideas / Investigación</div>
-              <div class="cardSub">Captura rápido. Después lo conviertes en post/historia.</div>
-            </div>
-            <button class="btn" id="btnAddIdea">+ Idea</button>
-          </div>
-          <div id="ideasList" class="list"></div>
-        </section>
-
-        <section class="card">
-          <div class="cardHead">
-            <div>
               <div class="cardTitle">Calendario de sesiones</div>
               <div class="cardSub">Programa con fecha y hora. Repeticiones semanales para suscripciones.</div>
             </div>
@@ -188,6 +188,19 @@
           </div>
           <div id="bookingsList" class="list compactList"></div>
         </section>
+      </section>
+
+      <section class="grid tabPanel" data-panel="investigacion">
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Ideas / Investigación</div>
+              <div class="cardSub">Captura rápido. Después lo conviertes en post/historia.</div>
+            </div>
+            <button class="btn" id="btnAddIdea">+ Idea</button>
+          </div>
+          <div id="ideasList" class="list"></div>
+        </section>
 
         <section class="card">
           <div class="cardHead">
@@ -198,6 +211,23 @@
             <button class="btn" id="btnAddReminder">+ Recordatorio</button>
           </div>
           <div id="remindersList" class="list"></div>
+        </section>
+      </section>
+
+      <section class="grid tabPanel" data-panel="suscripcion">
+        <section class="card fullSpan">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Suscripción - Diosa en Guía</div>
+              <div class="cardSub">Vista por año y mes, con seguimiento por tipo de suscripción.</div>
+            </div>
+            <button class="btn" id="btnAddSubscription">+ Registro</button>
+          </div>
+          <div class="subscriptionFilters">
+            <select id="subscriptionYear" class="input small"></select>
+            <select id="subscriptionMonth" class="input small"></select>
+          </div>
+          <div id="subscriptionBoards" class="subscriptionBoards"></div>
         </section>
       </section>
     </main>
