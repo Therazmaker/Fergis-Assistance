@@ -149,11 +149,10 @@ const CONTENT_SECTIONS = [
   ["postVideo", "🌻 Post / Video"]
 ];
 
-const APP_TABS = ["plan","contenido","clientes","investigacion","suscripcion"];
+const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion"];
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
-  { key:"preguntas", label:"Suscripciones · Preguntas", sessions:9 },
-  { key:"normales", label:"Sesiones normales", sessions:4 }
+  { key:"preguntas", label:"Suscripciones · Preguntas", sessions:9 }
 ];
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -225,6 +224,11 @@ function loadState(){
     },
     activeTab: "plan",
     subscriptions: {
+      viewYear: new Date().getFullYear(),
+      viewMonth: new Date().getMonth()+1,
+      entries: []
+    },
+    oneToOneSessions: {
       viewYear: new Date().getFullYear(),
       viewMonth: new Date().getMonth()+1,
       entries: []
@@ -368,6 +372,24 @@ function normalizeState_(st){
     sub.observations = sub.observations || "";
     sub.invoiceImage = sub.invoiceImage || "";
     sub.invoiceImageName = sub.invoiceImageName || "";
+  }
+
+  st.oneToOneSessions = st.oneToOneSessions || {};
+  st.oneToOneSessions.viewYear = Number(st.oneToOneSessions.viewYear || new Date().getFullYear());
+  st.oneToOneSessions.viewMonth = Number(st.oneToOneSessions.viewMonth || (new Date().getMonth()+1));
+  st.oneToOneSessions.entries = Array.isArray(st.oneToOneSessions.entries) ? st.oneToOneSessions.entries : [];
+  for(const sess of st.oneToOneSessions.entries){
+    if(!sess.id) sess.id = uid("s11");
+    sess.date = sess.date || todayKey();
+    sess.consultant = (sess.consultant || "").trim();
+    sess.contact = (sess.contact || "").trim();
+    sess.birthDate = sess.birthDate || "";
+    sess.sessionType = (sess.sessionType || "").trim();
+    sess.modality = (sess.modality || "").trim();
+    sess.costSoles = Number(sess.costSoles || 0) || 0;
+    sess.costDolares = Number(sess.costDolares || 0) || 0;
+    sess.invoiceImage = sess.invoiceImage || "";
+    sess.invoiceImageName = sess.invoiceImageName || "";
   }
 
   // Back-compat: tasks sin category -> mission
@@ -960,6 +982,7 @@ function render(){
   renderMetrics();
   renderTabs();
   renderSubscriptions();
+  renderOneToOneSessions();
   updateSyncUI();
 }
 
@@ -1003,7 +1026,6 @@ function renderSubscriptions(){
     const byType = rows.filter(x => x.type===type.key);
     const body = byType.length ? byType.map((e)=>{
       const checks = cols.map((n)=>`<td><input type="checkbox" data-act="subToggleSession" data-id="${e.id}" data-session="${n}" ${e.sessionsDone.includes(n)?"checked":""} /></td>`).join("");
-      const invoice = e.invoiceImage ? `<img class="subImg" src="${e.invoiceImage}" alt="Factura" />` : `<span class="subEmpty">Sin imagen</span>`;
       return `<tr>
         <td>${escapeHtml(new Date(`${e.paymentDate}T00:00:00`).toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' }))}</td>
         <td>${escapeHtml(e.name)}</td>
@@ -1013,8 +1035,9 @@ function renderSubscriptions(){
         <td><input class="input small" data-act="subObservations" data-id="${e.id}" value="${escapeAttr(e.observations || "")}" /></td>
         <td>
           <div style="display:flex;gap:8px;align-items:center">
-            ${invoice}
-            <input type="file" data-act="subInvoice" data-id="${e.id}" accept="image/*" />
+            <input type="file" data-act="subInvoice" data-id="${e.id}" accept="image/*" style="display:none" />
+            <button class="btn ghost" data-act="subUpload" data-id="${e.id}">${e.invoiceImage ? "Cambiar" : "Subir"}</button>
+            ${e.invoiceImage ? `<button class="btn ghost" data-act="subViewInvoice" data-id="${e.id}">Ver</button>` : `<span class="subEmpty">Sin imagen</span>`}
           </div>
         </td>
         <td><button class="btn ghost" data-act="subDelete" data-id="${e.id}">🗑</button></td>
@@ -1039,6 +1062,15 @@ function renderSubscriptions(){
       </div>
     </div>`;
   }).join("");
+}
+
+function openImagePreviewModal(src, title="Factura"){
+  openModal(
+    title,
+    `<div style="display:flex;justify-content:center"><img src="${src}" alt="${escapeAttr(title)}" style="max-width:100%;max-height:65vh;border-radius:10px;border:1px solid var(--line);object-fit:contain" /></div>`,
+    `<button class="btn" id="mCloseInvoice">Cerrar</button>`
+  );
+  $("#mCloseInvoice").onclick = closeModal;
 }
 
 function addSubscription(obj={}){
@@ -1081,6 +1113,112 @@ function openSubscriptionModal(){
       costSoles: $("#mSubSoles").value,
       costDolares: $("#mSubDol").value,
       observations: $("#mSubObs").value
+    });
+    closeModal();
+  };
+}
+
+function renderOneToOneSessions(){
+  const ySel = $("#oneToOneYear");
+  const mSel = $("#oneToOneMonth");
+  const boards = $("#oneToOneBoards");
+  if(!ySel || !mSel || !boards) return;
+
+  const years = new Set([STATE.oneToOneSessions.viewYear, ...STATE.oneToOneSessions.entries.map(e => new Date(`${e.date}T00:00:00`).getFullYear())]);
+  const sortedYears = [...years].filter(Boolean).sort((a,b)=>b-a);
+  ySel.innerHTML = sortedYears.map(y=>`<option value="${y}" ${Number(y)===Number(STATE.oneToOneSessions.viewYear)?"selected":""}>${y}</option>`).join("");
+  mSel.innerHTML = MONTHS_ES.map((m,idx)=>`<option value="${idx+1}" ${(idx+1)===Number(STATE.oneToOneSessions.viewMonth)?"selected":""}>${m}</option>`).join("");
+
+  const vY = Number(STATE.oneToOneSessions.viewYear);
+  const vM = Number(STATE.oneToOneSessions.viewMonth);
+  const rows = STATE.oneToOneSessions.entries.filter(e=>{
+    const d = new Date(`${e.date}T00:00:00`);
+    return d.getFullYear()===vY && (d.getMonth()+1)===vM;
+  });
+
+  const body = rows.length ? rows.map((e)=>`<tr>
+      <td>${escapeHtml(new Date(`${e.date}T00:00:00`).toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' }))}</td>
+      <td>${escapeHtml(e.consultant || "")}</td>
+      <td>${escapeHtml(e.contact || "")}</td>
+      <td>${e.birthDate ? escapeHtml(new Date(`${e.birthDate}T00:00:00`).toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })) : ""}</td>
+      <td><input class="input small" data-act="s11SessionType" data-id="${e.id}" value="${escapeAttr(e.sessionType || "")}" /></td>
+      <td><input class="input small" data-act="s11Modality" data-id="${e.id}" value="${escapeAttr(e.modality || "")}" /></td>
+      <td>${e.costSoles || ""}</td>
+      <td>${e.costDolares || ""}</td>
+      <td>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="file" data-act="s11Invoice" data-id="${e.id}" accept="image/*" style="display:none" />
+          <button class="btn ghost" data-act="s11Upload" data-id="${e.id}">${e.invoiceImage ? "Cambiar" : "Subir"}</button>
+          ${e.invoiceImage ? `<button class="btn ghost" data-act="s11ViewInvoice" data-id="${e.id}">Ver</button>` : `<span class="subEmpty">Sin imagen</span>`}
+        </div>
+      </td>
+      <td><button class="btn ghost" data-act="s11Delete" data-id="${e.id}">🗑</button></td>
+    </tr>`).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
+
+  const totalS = rows.reduce((a,x)=>a+Number(x.costSoles||0),0);
+  const totalD = rows.reduce((a,x)=>a+Number(x.costDolares||0),0);
+
+  boards.innerHTML = `<div class="subBoard">
+    <h4>Sesiones 1:1</h4>
+    <div class="subTableWrap">
+      <table class="subTable">
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Consultante</th><th>Contacto</th><th>Fecha de nacimiento</th><th>Tipo de sesión</th><th>Modalidad</th><th>Costo en soles</th><th>Costo en dólares</th><th>Factura</th><th></th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr><td colspan="6">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="2"></td></tr></tfoot>
+      </table>
+    </div>
+  </div>`;
+}
+
+function addOneToOneSession(obj={}){
+  const entry = {
+    id: uid("s11"),
+    date: obj.date || todayKey(),
+    consultant: (obj.consultant || "").trim(),
+    contact: (obj.contact || "").trim(),
+    birthDate: obj.birthDate || "",
+    sessionType: (obj.sessionType || "").trim(),
+    modality: (obj.modality || "").trim(),
+    costSoles: Number(obj.costSoles || 0) || 0,
+    costDolares: Number(obj.costDolares || 0) || 0,
+    invoiceImage: "",
+    invoiceImageName: "",
+    createdAt: nowISO()
+  };
+  STATE.oneToOneSessions.entries.unshift(entry);
+  enqueueEvent("session11_add", entry);
+  saveState();
+  renderOneToOneSessions();
+}
+
+function openOneToOneSessionModal(){
+  openModal(
+    "Nueva sesión 1:1",
+    `<div class="row"><label class="label">Fecha</label><input id="mS11Date" type="date" class="input" value="${todayKey()}" /></div>
+    <div class="row"><label class="label">Consultante</label><input id="mS11Consultant" class="input" /></div>
+    <div class="row"><label class="label">Contacto</label><input id="mS11Contact" class="input" /></div>
+    <div class="row"><label class="label">Fecha de nacimiento</label><input id="mS11BirthDate" type="date" class="input" /></div>
+    <div class="row"><label class="label">Tipo de sesión</label><input id="mS11SessionType" class="input" placeholder="Escribe libremente" /></div>
+    <div class="row"><label class="label">Modalidad</label><input id="mS11Modality" class="input" placeholder="Escribe libremente" /></div>
+    <div class="row"><label class="label">Costo en soles</label><input id="mS11Soles" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Costo en dólares</label><input id="mS11Dol" type="number" class="input" min="0" step="0.01" /></div>`,
+    `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
+  );
+  $("#mCancel").onclick = closeModal;
+  $("#mSave").onclick = () => {
+    addOneToOneSession({
+      date: $("#mS11Date").value || todayKey(),
+      consultant: $("#mS11Consultant").value,
+      contact: $("#mS11Contact").value,
+      birthDate: $("#mS11BirthDate").value,
+      sessionType: $("#mS11SessionType").value,
+      modality: $("#mS11Modality").value,
+      costSoles: $("#mS11Soles").value,
+      costDolares: $("#mS11Dol").value
     });
     closeModal();
   };
@@ -2054,8 +2192,11 @@ function wire(){
 
 
   $("#btnAddSubscription")?.addEventListener("click", openSubscriptionModal);
+  $("#btnAddOneToOneSession")?.addEventListener("click", openOneToOneSessionModal);
   $("#subscriptionYear")?.addEventListener("change", (e)=>{ STATE.subscriptions.viewYear = Number(e.target.value); saveState(); renderSubscriptions(); });
   $("#subscriptionMonth")?.addEventListener("change", (e)=>{ STATE.subscriptions.viewMonth = Number(e.target.value); saveState(); renderSubscriptions(); });
+  $("#oneToOneYear")?.addEventListener("change", (e)=>{ STATE.oneToOneSessions.viewYear = Number(e.target.value); saveState(); renderOneToOneSessions(); });
+  $("#oneToOneMonth")?.addEventListener("change", (e)=>{ STATE.oneToOneSessions.viewMonth = Number(e.target.value); saveState(); renderOneToOneSessions(); });
   $("#subscriptionBoards")?.addEventListener("change", async (e) => {
     const t = e.target;
     const id = t.dataset.id;
@@ -2095,12 +2236,77 @@ function wire(){
     saveState();
   });
   $("#subscriptionBoards")?.addEventListener("click", (e) => {
+    const viewBtn = e.target.closest("button[data-act='subViewInvoice']");
+    if(viewBtn){
+      const row = STATE.subscriptions.entries.find(x=>x.id===viewBtn.dataset.id);
+      if(row?.invoiceImage) openImagePreviewModal(row.invoiceImage, `Factura · ${row.name || "registro"}`);
+      return;
+    }
+    const uploadBtn = e.target.closest("button[data-act='subUpload']");
+    if(uploadBtn){
+      const fileInput = document.querySelector(`input[data-act='subInvoice'][data-id='${uploadBtn.dataset.id}']`);
+      fileInput?.click();
+      return;
+    }
     const btn = e.target.closest("button[data-act='subDelete']");
     if(!btn) return;
     STATE.subscriptions.entries = STATE.subscriptions.entries.filter(x=>x.id!==btn.dataset.id);
     enqueueEvent("subscription_delete", { id: btn.dataset.id });
     saveState();
     renderSubscriptions();
+  });
+
+  $("#oneToOneBoards")?.addEventListener("change", async (e) => {
+    const t = e.target;
+    const id = t.dataset.id;
+    if(!id) return;
+    const row = STATE.oneToOneSessions.entries.find(x=>x.id===id);
+    if(!row) return;
+    if(t.dataset.act === "s11Invoice"){
+      const file = t.files?.[0];
+      if(!file) return;
+      const b64 = await new Promise((resolve,reject)=>{
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      }).catch(()=>null);
+      if(!b64){ toast("No pude leer la imagen."); return; }
+      row.invoiceImage = String(b64);
+      row.invoiceImageName = file.name || "";
+      enqueueEvent("session11_invoice", { id, invoiceImageName: row.invoiceImageName });
+      saveState();
+      renderOneToOneSessions();
+    }
+  });
+  $("#oneToOneBoards")?.addEventListener("input", (e) => {
+    const t = e.target;
+    if(!["s11SessionType", "s11Modality"].includes(t.dataset.act)) return;
+    const row = STATE.oneToOneSessions.entries.find(x=>x.id===t.dataset.id);
+    if(!row) return;
+    if(t.dataset.act === "s11SessionType") row.sessionType = t.value;
+    if(t.dataset.act === "s11Modality") row.modality = t.value;
+    saveState();
+  });
+  $("#oneToOneBoards")?.addEventListener("click", (e) => {
+    const viewBtn = e.target.closest("button[data-act='s11ViewInvoice']");
+    if(viewBtn){
+      const row = STATE.oneToOneSessions.entries.find(x=>x.id===viewBtn.dataset.id);
+      if(row?.invoiceImage) openImagePreviewModal(row.invoiceImage, `Factura · ${row.consultant || "sesión"}`);
+      return;
+    }
+    const uploadBtn = e.target.closest("button[data-act='s11Upload']");
+    if(uploadBtn){
+      const fileInput = document.querySelector(`input[data-act='s11Invoice'][data-id='${uploadBtn.dataset.id}']`);
+      fileInput?.click();
+      return;
+    }
+    const delBtn = e.target.closest("button[data-act='s11Delete']");
+    if(!delBtn) return;
+    STATE.oneToOneSessions.entries = STATE.oneToOneSessions.entries.filter(x=>x.id!==delBtn.dataset.id);
+    enqueueEvent("session11_delete", { id: delBtn.dataset.id });
+    saveState();
+    renderOneToOneSessions();
   });
 
   $("#clientFilter").addEventListener("change", renderClients);
