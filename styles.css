@@ -234,15 +234,14 @@ body{
   width:min(620px, 96vw);
   max-height: min(82vh, 820px);
   overflow:hidden;
-  font-size:16px;
   border-radius:18px;
   border:1px solid var(--line);
   background: linear-gradient(180deg, rgba(15,22,32,.98), rgba(11,15,20,.98));
   box-shadow: var(--shadow);
   display:flex;flex-direction:column;
 }
-.modal.modal-sm{ width:min(560px, 96vw); }
-.modal.modal-md{ width:min(760px, 96vw); }
+.modal.modal-sm{ width:min(520px, 96vw); }
+.modal.modal-md{ width:min(680px, 96vw); }
 .modal.modal-lg{ width:min(1100px, 95vw); max-height: 92vh; }
 
 /* Session modal layout */
@@ -263,20 +262,15 @@ body{
 .sessActions{display:flex; gap:10px; flex-wrap:wrap;}
 .modalHead{
   display:flex;align-items:center;justify-content:space-between;
-  padding:16px;
+  padding:12px;
   border-bottom:1px solid var(--line);
   flex-shrink:0;
 }
-.modalTitle{font-weight:900;font-size:1.25rem}
-.modalBody{padding:16px;overflow-y:auto;flex:1 1 0;min-height:0}
+.modalTitle{font-weight:900}
+.modalBody{padding:12px;overflow-y:auto;flex:1 1 auto;min-height:180px}
 .modalFoot{
-  padding:16px;
+  padding:12px;
   border-top:1px solid var(--line);
   display:flex;gap:8px;justify-content:flex-end;
   flex-shrink:0;
 }
-
-.modal .btn,
-.modal .input{font-size:1rem}
-.modal .label,
-.modal .itemMeta{font-size:.875rem}
