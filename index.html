@@ -53,8 +53,9 @@
       <section class="tabsNav" id="tabsNav">
         <button class="tabBtn active" data-tab="plan">Plan Girasol</button>
         <button class="tabBtn" data-tab="contenido">Contenido de hoy</button>
-        <button class="tabBtn" data-tab="clientes">Clientes y Calendario</button>
         <button class="tabBtn" data-tab="investigacion">Investigación</button>
+        <button class="tabBtn" data-tab="clientes">Clientes y calendario</button>
+        <button class="tabBtn" data-tab="sesiones11">Sesiones 1:1</button>
         <button class="tabBtn" data-tab="suscripcion">Suscripción - Diosa en Guía</button>
       </section>
 
@@ -228,6 +229,23 @@
             <select id="subscriptionMonth" class="input small"></select>
           </div>
           <div id="subscriptionBoards" class="subscriptionBoards"></div>
+        </section>
+      </section>
+
+      <section class="grid tabPanel" data-panel="sesiones11">
+        <section class="card fullSpan">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Sesiones 1:1</div>
+              <div class="cardSub">Registro mensual de sesiones individuales.</div>
+            </div>
+            <button class="btn" id="btnAddOneToOneSession">+ Sesión</button>
+          </div>
+          <div class="subscriptionFilters">
+            <select id="oneToOneYear" class="input small"></select>
+            <select id="oneToOneMonth" class="input small"></select>
+          </div>
+          <div id="oneToOneBoards" class="subscriptionBoards"></div>
         </section>
       </section>
     </main>
