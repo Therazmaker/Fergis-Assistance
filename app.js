@@ -1948,6 +1948,7 @@ function wire(){
 
   $("#modalClose").addEventListener("click", closeModal);
   $("#modalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="modalOverlay") closeModal(); });
+  document.addEventListener("keydown", (e)=>{ if(e.key==="Escape" && !$("#modalOverlay").classList.contains("hidden")) closeModal(); });
 
   // Guardar si la app se oculta (sirve para "se cortó la sesión")
   document.addEventListener("visibilitychange", () => {
@@ -2126,7 +2127,7 @@ function openClientModal(clientId=null){
       const occ = btn.dataset.occ || null;
       if(act==="cEditBooking"){ closeModal(); openBookingModal(id); }
       if(act==="cOpenSession"){ closeModal(); openClientSessionModal(id, occ); }
-    });
+    }, { once: true });
   }
 }
 

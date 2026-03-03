@@ -264,11 +264,13 @@ body{
   display:flex;align-items:center;justify-content:space-between;
   padding:12px 12px;
   border-bottom:1px solid var(--line);
+  flex-shrink:0;
 }
 .modalTitle{font-weight:900}
-.modalBody{padding:12px;overflow:auto}
+.modalBody{padding:12px;overflow-y:auto;flex:1 1 0;min-height:0}
 .modalFoot{
   padding:12px;
   border-top:1px solid var(--line);
   display:flex;gap:8px;justify-content:flex-end;
+  flex-shrink:0;
 }
