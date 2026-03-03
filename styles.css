@@ -95,6 +95,8 @@ body{
   grid-template-columns: 1fr 1fr;
   gap:14px;
 }
+.grid.tabPanel{display:none}
+.grid.tabPanel.active{display:grid}
 @media (max-width: 940px){
   .grid{grid-template-columns:1fr}
   .heroCard{flex-direction:column}
