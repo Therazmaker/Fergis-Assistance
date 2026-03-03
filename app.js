@@ -862,7 +862,7 @@ function addIdea(obj){
   const i = {
     id: uid("idea"),
     title: (obj.title || "").trim(),
-    kind: obj.kind || "idea", // idea | post | story | thread
+    kind: obj.kind || "idea", // idea | post | story | thread | investigacion
     tags: (obj.tags || "").trim(),
     notes: (obj.notes || "").trim(),
     createdAt: nowISO()
@@ -1083,8 +1083,8 @@ function addSubscription(obj={}){
     costDolares: Number(obj.costDolares || 0) || 0,
     sessionsDone: [],
     observations: (obj.observations || "").trim(),
-    invoiceImage: "",
-    invoiceImageName: "",
+    invoiceImage: obj.invoiceImage || "",
+    invoiceImageName: obj.invoiceImageName || "",
     createdAt: nowISO()
   };
   STATE.subscriptions.entries.unshift(entry);
@@ -1101,18 +1101,35 @@ function openSubscriptionModal(){
     <div class="row"><label class="label">Nombre</label><input id="mSubName" class="input" placeholder="Nombre de cliente" /></div>
     <div class="row"><label class="label">Costo soles</label><input id="mSubSoles" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Costo dólares</label><input id="mSubDol" type="number" class="input" min="0" step="0.01" /></div>
-    <div class="row"><label class="label">Observaciones</label><input id="mSubObs" class="input" /></div>`,
+    <div class="row"><label class="label">Observaciones</label><input id="mSubObs" class="input" /></div>
+    <div class="row"><label class="label">Factura (imagen)</label><input id="mSubInvoice" type="file" class="input" accept="image/*" /></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
-  $("#mSave").onclick = () => {
+  $("#mSave").onclick = async () => {
+    const file = $("#mSubInvoice")?.files?.[0];
+    let invoiceImage = "";
+    let invoiceImageName = "";
+    if(file){
+      const b64 = await new Promise((resolve,reject)=>{
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      }).catch(()=>null);
+      if(!b64){ toast("No pude leer la imagen."); return; }
+      invoiceImage = String(b64);
+      invoiceImageName = file.name || "";
+    }
     addSubscription({
       type: $("#mSubType").value,
       paymentDate: $("#mSubDate").value || todayKey(),
       name: $("#mSubName").value,
       costSoles: $("#mSubSoles").value,
       costDolares: $("#mSubDol").value,
-      observations: $("#mSubObs").value
+      observations: $("#mSubObs").value,
+      invoiceImage,
+      invoiceImageName
     });
     closeModal();
   };
@@ -1185,8 +1202,8 @@ function addOneToOneSession(obj={}){
     modality: (obj.modality || "").trim(),
     costSoles: Number(obj.costSoles || 0) || 0,
     costDolares: Number(obj.costDolares || 0) || 0,
-    invoiceImage: "",
-    invoiceImageName: "",
+    invoiceImage: obj.invoiceImage || "",
+    invoiceImageName: obj.invoiceImageName || "",
     createdAt: nowISO()
   };
   STATE.oneToOneSessions.entries.unshift(entry);
@@ -1205,11 +1222,26 @@ function openOneToOneSessionModal(){
     <div class="row"><label class="label">Tipo de sesión</label><input id="mS11SessionType" class="input" placeholder="Escribe libremente" /></div>
     <div class="row"><label class="label">Modalidad</label><input id="mS11Modality" class="input" placeholder="Escribe libremente" /></div>
     <div class="row"><label class="label">Costo en soles</label><input id="mS11Soles" type="number" class="input" min="0" step="0.01" /></div>
-    <div class="row"><label class="label">Costo en dólares</label><input id="mS11Dol" type="number" class="input" min="0" step="0.01" /></div>`,
+    <div class="row"><label class="label">Costo en dólares</label><input id="mS11Dol" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Factura (imagen)</label><input id="mS11Invoice" type="file" class="input" accept="image/*" /></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
-  $("#mSave").onclick = () => {
+  $("#mSave").onclick = async () => {
+    const file = $("#mS11Invoice")?.files?.[0];
+    let invoiceImage = "";
+    let invoiceImageName = "";
+    if(file){
+      const b64 = await new Promise((resolve,reject)=>{
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      }).catch(()=>null);
+      if(!b64){ toast("No pude leer la imagen."); return; }
+      invoiceImage = String(b64);
+      invoiceImageName = file.name || "";
+    }
     addOneToOneSession({
       date: $("#mS11Date").value || todayKey(),
       consultant: $("#mS11Consultant").value,
@@ -1218,7 +1250,9 @@ function openOneToOneSessionModal(){
       sessionType: $("#mS11SessionType").value,
       modality: $("#mS11Modality").value,
       costSoles: $("#mS11Soles").value,
-      costDolares: $("#mS11Dol").value
+      costDolares: $("#mS11Dol").value,
+      invoiceImage,
+      invoiceImageName
     });
     closeModal();
   };
@@ -1439,7 +1473,7 @@ function renderIdeas(){
     return;
   }
   list.innerHTML = items.map(i => {
-    const kindMap = { idea:["Idea","neutral"], post:["Post","ok"], story:["Historia","ok"], thread:["Hilo","neutral"] };
+    const kindMap = { idea:["Idea","neutral"], post:["Post","ok"], story:["Historia","ok"], thread:["Hilo","neutral"], investigacion:["Investigación","warn"] };
     const k = kindMap[i.kind] || ["Idea","neutral"];
     const tags = i.tags ? ` • ${escapeHtml(i.tags)}` : "";
     const notes = i.notes ? `<div class="itemMeta">${escapeHtml(i.notes)}</div>` : "";
@@ -2514,8 +2548,8 @@ function openIdeaModal(ideaId=null){
       <div class="row">
         <label class="label">Tipo</label>
         <select id="mIKind" class="input">
-          ${["idea","post","story","thread"].map(k => {
-            const lbl = ({idea:"Idea",post:"Post",story:"Historia",thread:"Hilo"})[k];
+          ${["idea","post","story","thread","investigacion"].map(k => {
+            const lbl = ({idea:"Idea",post:"Post",story:"Historia",thread:"Hilo",investigacion:"Investigación"})[k];
             const sel = (i?.kind===k) ? "selected" : "";
             return `<option value="${k}" ${sel}>${lbl}</option>`;
           }).join("")}
@@ -2527,7 +2561,7 @@ function openIdeaModal(ideaId=null){
       </div>
       <div class="row">
         <label class="label">Notas</label>
-        <input id="mINotes" class="input" value="${escapeHtml(i?.notes||"")}" placeholder="Bullet mental: gancho / estructura / CTA…" />
+        <textarea id="mINotes" class="input" style="min-height:130px;resize:vertical" placeholder="Bullet mental: gancho / estructura / CTA…">${escapeHtml(i?.notes||"")}</textarea>
       </div>
     `,
     `
