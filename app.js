@@ -317,7 +317,7 @@ function saveSettings(){
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS));
 }
 
-// ---------- State normalization + Plan Girasol seeding ----------
+// ---------- State normalization ----------
 function normalizeState_(st){
   st = st || {};
   st.v = st.v || "0.1";
@@ -412,59 +412,6 @@ function getClientForBooking_(b){
   const handleShow = c?.handle ? "@"+String(c.handle).replace(/^@/,"") : (b.client||"");
   const display = c ? (c.name || handleShow || "(sin nombre)") : (b.client || "(sin cliente)");
   return { client:c, display, zodiac, element, handleShow };
-}
-
-function seedPlanGirasolIfNeeded_(){
-  const hasPlanTasks = STATE.tasks.some((t) => t.category === "plan");
-  if(hasPlanTasks) return;
-
-  // Seed solo si todavía no existe un Plan Girasol
-  const ws = weekStartMonday(new Date());
-  const createdAt = nowISO();
-
-  // Nuevo plan (editable) basado en el update solicitado
-  const daily = [
-    "Subir storie (servicios o pregunta: ‘Si pudieras hacerle una pregunta al tarot, ¿cuál sería?’)",
-    "Actualizarme: ir a Lupita / perfiles de astrólogas (tendencias + ideas)",
-    "Buscar gente en comentarios o DMs (leads)",
-    "Escribir y hacer seguimiento (oferta / mensajito / check-in)",
-    "Subir post (si hoy toca: educativo, emocional o CTA)"
-  ];
-
-  // Un toque de estructura sin imponer: sugerencias por día (igual es editable)
-  const weeklyNudgesByDow = {
-    0: ["Sugerencia: Post educativo (autoridad)"],
-    2: ["Sugerencia: Post relatable/emocional (conexión)"],
-    4: ["Sugerencia: CTA directo (agenda / servicio)"],
-    6: ["Revisión semanal: ordenar leads + próximos pasos"]
-  };
-
-  const newTasks = [];
-  for(let i=0;i<7;i++){
-    const d = addDays(ws, i);
-    const dayKey = dateKey(d);
-    // diarios
-    for(const title of daily){
-      newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
-    }
-    // empujoncitos por día
-    const dow = i; // 0..6 Mon..Sun
-    const n = weeklyNudgesByDow[dow] || [];
-    for(const title of n){
-      newTasks.push(makeTask_(title, { pinnedDay: dayKey, category: "plan", createdAt }));
-    }
-  }
-
-  // Insertamos al inicio (para que aparezcan arriba por día)
-  STATE.tasks = [...newTasks.reverse(), ...STATE.tasks];
-
-  // Registrar eventos para sync (solo si sync está habilitado o si quieres data completa)
-  for(const t of newTasks){
-    enqueueEvent("task_add", t);
-  }
-
-  STATE.planWeekId = weekIdISO(new Date());
-  saveState();
 }
 
 // ---------- Bookings (sesiones programadas) ----------
@@ -2603,14 +2550,15 @@ function openSettings(){
       <div class="divider"></div>
 
       <div class="row">
-        <label class="label">Exportar respaldo (JSON)</label>
+        <label class="label">Exportar memoria completa (JSON)</label>
         <button class="btn" id="btnExport">⬇ Exportar</button>
+        <div class="itemMeta">Incluye estado, ajustes y metadatos del respaldo.</div>
       </div>
 
       <div class="row">
-        <label class="label">Importar respaldo</label>
+        <label class="label">Importar memoria completa</label>
         <input type="file" id="fileImport" class="input" accept="application/json" />
-        <div class="itemMeta">Importa sobreescribiendo el estado local.</div>
+        <div class="itemMeta">Restaura estado y ajustes locales. Sobrescribe lo actual.</div>
       </div>
 
       <div class="divider"></div>
@@ -2634,7 +2582,13 @@ function openSettings(){
   };
 
   $("#btnExport").onclick = () => {
-    const blob = new Blob([JSON.stringify(STATE, null, 2)], { type:"application/json" });
+    const backup = {
+      format: "fergis_assistant_backup_v1",
+      exportedAt: nowISO(),
+      state: STATE,
+      settings: SETTINGS
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type:"application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -2649,8 +2603,18 @@ function openSettings(){
     try{
       const txt = await file.text();
       const parsed = JSON.parse(txt);
-      if(!parsed || !parsed.v) throw new Error("Formato inválido");
-      STATE = parsed;
+      const isLegacyState = !!(parsed && parsed.v);
+      const hasBundle = parsed && parsed.format === "fergis_assistant_backup_v1" && parsed.state;
+      if(!isLegacyState && !hasBundle) throw new Error("Formato inválido");
+
+      const nextState = hasBundle ? parsed.state : parsed;
+      const nextSettings = hasBundle ? { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) } : null;
+
+      STATE = normalizeState_(nextState);
+      if(nextSettings){
+        SETTINGS = nextSettings;
+        saveSettings();
+      }
       saveState();
       toast("Importado.");
       closeModal();
@@ -2673,7 +2637,6 @@ if("serviceWorker" in navigator){
   });
 }
 
-seedPlanGirasolIfNeeded_();
 wire();
 recoverStateFromIDB();
 render();
