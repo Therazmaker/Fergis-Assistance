@@ -148,6 +148,15 @@ const CONTENT_SECTIONS = [
   ["threads", "🌻 Threads"],
   ["postVideo", "🌻 Post / Video"]
 ];
+
+const APP_TABS = ["plan","contenido","clientes","investigacion","suscripcion"];
+const SUBSCRIPTION_TYPES = [
+  { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
+  { key:"preguntas", label:"Suscripciones · Preguntas", sessions:9 },
+  { key:"normales", label:"Sesiones normales", sessions:4 }
+];
+const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
+
 function getTodayKey(){ return todayKey(); }
 
 function formatContentDateLabel(dayKey){
@@ -213,6 +222,12 @@ function loadState(){
       activeDate: todayKey(),
       days: {},
       historyOrder: []
+    },
+    activeTab: "plan",
+    subscriptions: {
+      viewYear: new Date().getFullYear(),
+      viewMonth: new Date().getMonth()+1,
+      entries: []
     }
   };
 }
@@ -336,6 +351,24 @@ function normalizeState_(st){
   st.contentTodo.activeDate = st.contentTodo.activeDate || todayKey();
   st.contentTodo.days = st.contentTodo.days && typeof st.contentTodo.days === "object" ? st.contentTodo.days : {};
   st.contentTodo.historyOrder = Array.isArray(st.contentTodo.historyOrder) ? st.contentTodo.historyOrder : [];
+
+  st.activeTab = APP_TABS.includes(st.activeTab) ? st.activeTab : "plan";
+  st.subscriptions = st.subscriptions || {};
+  st.subscriptions.viewYear = Number(st.subscriptions.viewYear || new Date().getFullYear());
+  st.subscriptions.viewMonth = Number(st.subscriptions.viewMonth || (new Date().getMonth()+1));
+  st.subscriptions.entries = Array.isArray(st.subscriptions.entries) ? st.subscriptions.entries : [];
+  for(const sub of st.subscriptions.entries){
+    if(!sub.id) sub.id = uid("sub");
+    sub.type = sub.type || "oneToOne";
+    sub.paymentDate = sub.paymentDate || todayKey();
+    sub.name = (sub.name || "").trim();
+    sub.costSoles = Number(sub.costSoles || 0) || 0;
+    sub.costDolares = Number(sub.costDolares || 0) || 0;
+    sub.sessionsDone = Array.isArray(sub.sessionsDone) ? sub.sessionsDone : [];
+    sub.observations = sub.observations || "";
+    sub.invoiceImage = sub.invoiceImage || "";
+    sub.invoiceImageName = sub.invoiceImageName || "";
+  }
 
   // Back-compat: tasks sin category -> mission
   for(const t of st.tasks){
@@ -925,7 +958,132 @@ function render(){
   renderClients();
   renderIdeas();
   renderMetrics();
+  renderTabs();
+  renderSubscriptions();
   updateSyncUI();
+}
+
+
+function renderTabs(){
+  document.querySelectorAll(".tabBtn").forEach((btn)=>{
+    const on = btn.dataset.tab === STATE.activeTab;
+    btn.classList.toggle("active", on);
+  });
+  document.querySelectorAll(".tabPanel").forEach((panel)=>{
+    const on = panel.dataset.panel === STATE.activeTab;
+    panel.classList.toggle("active", on);
+  });
+}
+
+function monthTitle(m){ return MONTHS_ES[(m-1)] || `Mes ${m}`; }
+function sessionColumns(type){
+  const t = SUBSCRIPTION_TYPES.find(x=>x.key===type) || SUBSCRIPTION_TYPES[0];
+  return Array.from({ length: t.sessions }, (_,i)=> i+1);
+}
+function renderSubscriptions(){
+  const ySel = $("#subscriptionYear");
+  const mSel = $("#subscriptionMonth");
+  const boards = $("#subscriptionBoards");
+  if(!ySel || !mSel || !boards) return;
+
+  const years = new Set([STATE.subscriptions.viewYear, ...STATE.subscriptions.entries.map(e => new Date(`${e.paymentDate}T00:00:00`).getFullYear())]);
+  const sortedYears = [...years].filter(Boolean).sort((a,b)=>b-a);
+  ySel.innerHTML = sortedYears.map(y=>`<option value="${y}" ${Number(y)===Number(STATE.subscriptions.viewYear)?"selected":""}>${y}</option>`).join("");
+  mSel.innerHTML = MONTHS_ES.map((m,idx)=>`<option value="${idx+1}" ${(idx+1)===Number(STATE.subscriptions.viewMonth)?"selected":""}>${m}</option>`).join("");
+
+  const vY = Number(STATE.subscriptions.viewYear);
+  const vM = Number(STATE.subscriptions.viewMonth);
+  const rows = STATE.subscriptions.entries.filter(e=>{
+    const d = new Date(`${e.paymentDate}T00:00:00`);
+    return d.getFullYear()===vY && (d.getMonth()+1)===vM;
+  });
+
+  boards.innerHTML = SUBSCRIPTION_TYPES.map((type) => {
+    const cols = sessionColumns(type.key);
+    const byType = rows.filter(x => x.type===type.key);
+    const body = byType.length ? byType.map((e)=>{
+      const checks = cols.map((n)=>`<td><input type="checkbox" data-act="subToggleSession" data-id="${e.id}" data-session="${n}" ${e.sessionsDone.includes(n)?"checked":""} /></td>`).join("");
+      const invoice = e.invoiceImage ? `<img class="subImg" src="${e.invoiceImage}" alt="Factura" />` : `<span class="subEmpty">Sin imagen</span>`;
+      return `<tr>
+        <td>${escapeHtml(new Date(`${e.paymentDate}T00:00:00`).toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' }))}</td>
+        <td>${escapeHtml(e.name)}</td>
+        <td>${e.costSoles || ""}</td>
+        <td>${e.costDolares || ""}</td>
+        ${checks}
+        <td><input class="input small" data-act="subObservations" data-id="${e.id}" value="${escapeAttr(e.observations || "")}" /></td>
+        <td>
+          <div style="display:flex;gap:8px;align-items:center">
+            ${invoice}
+            <input type="file" data-act="subInvoice" data-id="${e.id}" accept="image/*" />
+          </div>
+        </td>
+        <td><button class="btn ghost" data-act="subDelete" data-id="${e.id}">🗑</button></td>
+      </tr>`;
+    }).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
+
+    const totalS = byType.reduce((a,x)=>a+Number(x.costSoles||0),0);
+    const totalD = byType.reduce((a,x)=>a+Number(x.costDolares||0),0);
+    const headers = cols.map(n=>`<th>Sesión ${n}</th>`).join("");
+    return `<div class="subBoard">
+      <h4>${escapeHtml(type.label)}</h4>
+      <div class="subTableWrap">
+        <table class="subTable">
+          <thead>
+            <tr>
+              <th>Fecha de pago</th><th>Nombre</th><th>Costo soles</th><th>Costo dólares</th>${headers}<th>Observaciones</th><th>Factura</th><th></th>
+            </tr>
+          </thead>
+          <tbody>${body}</tbody>
+          <tfoot><tr><td colspan="2">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="${cols.length+3}"></td></tr></tfoot>
+        </table>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function addSubscription(obj={}){
+  const entry = {
+    id: uid("sub"),
+    type: obj.type || "oneToOne",
+    paymentDate: obj.paymentDate || todayKey(),
+    name: (obj.name || "").trim(),
+    costSoles: Number(obj.costSoles || 0) || 0,
+    costDolares: Number(obj.costDolares || 0) || 0,
+    sessionsDone: [],
+    observations: (obj.observations || "").trim(),
+    invoiceImage: "",
+    invoiceImageName: "",
+    createdAt: nowISO()
+  };
+  STATE.subscriptions.entries.unshift(entry);
+  enqueueEvent("subscription_add", entry);
+  saveState();
+  renderSubscriptions();
+}
+
+function openSubscriptionModal(){
+  openModal(
+    "Nuevo registro de suscripción",
+    `<div class="row"><label class="label">Tipo</label><select id="mSubType" class="input">${SUBSCRIPTION_TYPES.map(t=>`<option value="${t.key}">${t.label}</option>`).join("")}</select></div>
+    <div class="row"><label class="label">Fecha de pago</label><input id="mSubDate" type="date" class="input" value="${todayKey()}" /></div>
+    <div class="row"><label class="label">Nombre</label><input id="mSubName" class="input" placeholder="Nombre de cliente" /></div>
+    <div class="row"><label class="label">Costo soles</label><input id="mSubSoles" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Costo dólares</label><input id="mSubDol" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Observaciones</label><input id="mSubObs" class="input" /></div>`,
+    `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
+  );
+  $("#mCancel").onclick = closeModal;
+  $("#mSave").onclick = () => {
+    addSubscription({
+      type: $("#mSubType").value,
+      paymentDate: $("#mSubDate").value || todayKey(),
+      name: $("#mSubName").value,
+      costSoles: $("#mSubSoles").value,
+      costDolares: $("#mSubDol").value,
+      observations: $("#mSubObs").value
+    });
+    closeModal();
+  };
 }
 
 function renderPlan(){
@@ -1444,6 +1602,14 @@ function toast(msg){
 }
 
 function wire(){
+  $("#tabsNav")?.addEventListener("click", (e) => {
+    const btn = e.target.closest(".tabBtn");
+    if(!btn) return;
+    STATE.activeTab = btn.dataset.tab;
+    saveState();
+    renderTabs();
+  });
+
   $("#btnAddContentItem").addEventListener("click", () => {
     openContentItemModal();
   });
@@ -1886,6 +2052,56 @@ function wire(){
     }
   });
 
+
+  $("#btnAddSubscription")?.addEventListener("click", openSubscriptionModal);
+  $("#subscriptionYear")?.addEventListener("change", (e)=>{ STATE.subscriptions.viewYear = Number(e.target.value); saveState(); renderSubscriptions(); });
+  $("#subscriptionMonth")?.addEventListener("change", (e)=>{ STATE.subscriptions.viewMonth = Number(e.target.value); saveState(); renderSubscriptions(); });
+  $("#subscriptionBoards")?.addEventListener("change", async (e) => {
+    const t = e.target;
+    const id = t.dataset.id;
+    if(!id) return;
+    const row = STATE.subscriptions.entries.find(x=>x.id===id);
+    if(!row) return;
+    if(t.dataset.act === "subToggleSession"){
+      const n = Number(t.dataset.session);
+      row.sessionsDone = row.sessionsDone.includes(n) ? row.sessionsDone.filter(x=>x!==n) : [...row.sessionsDone, n].sort((a,b)=>a-b);
+      enqueueEvent("subscription_session_toggle", { id, sessionsDone: row.sessionsDone });
+      saveState();
+      return;
+    }
+    if(t.dataset.act === "subInvoice"){
+      const file = t.files?.[0];
+      if(!file) return;
+      const b64 = await new Promise((resolve,reject)=>{
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      }).catch(()=>null);
+      if(!b64){ toast("No pude leer la imagen."); return; }
+      row.invoiceImage = String(b64);
+      row.invoiceImageName = file.name || "";
+      enqueueEvent("subscription_invoice", { id, invoiceImageName: row.invoiceImageName });
+      saveState();
+      renderSubscriptions();
+    }
+  });
+  $("#subscriptionBoards")?.addEventListener("input", (e) => {
+    const t = e.target;
+    if(t.dataset.act !== "subObservations") return;
+    const row = STATE.subscriptions.entries.find(x=>x.id===t.dataset.id);
+    if(!row) return;
+    row.observations = t.value;
+    saveState();
+  });
+  $("#subscriptionBoards")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act='subDelete']");
+    if(!btn) return;
+    STATE.subscriptions.entries = STATE.subscriptions.entries.filter(x=>x.id!==btn.dataset.id);
+    enqueueEvent("subscription_delete", { id: btn.dataset.id });
+    saveState();
+    renderSubscriptions();
+  });
 
   $("#clientFilter").addEventListener("change", renderClients);
   $("#clientSearch").addEventListener("input", renderClients);
