@@ -152,7 +152,7 @@ const CONTENT_SECTIONS = [
 const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion"];
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
-  { key:"preguntas", label:"Suscripciones · Preguntas", sessions:9 }
+  { key:"preguntas", label:"Suscripciones · Preguntas", sessions:10 }
 ];
 const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"];
 
@@ -1046,7 +1046,7 @@ function renderSubscriptions(){
 
     const totalS = byType.reduce((a,x)=>a+Number(x.costSoles||0),0);
     const totalD = byType.reduce((a,x)=>a+Number(x.costDolares||0),0);
-    const headers = cols.map(n=>`<th>Sesión ${n}</th>`).join("");
+    const headers = cols.map(n=>`<th>${type.key === "preguntas" ? "Pregunta" : "Sesión"} ${n}</th>`).join("");
     return `<div class="subBoard">
       <h4>${escapeHtml(type.label)}</h4>
       <div class="subTableWrap">
