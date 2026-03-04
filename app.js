@@ -407,8 +407,13 @@ function normalizeState_(st){
     reading.consultant = (reading.consultant || "").trim();
     reading.birthDate = reading.birthDate || "";
     reading.questionsCount = Number(reading.questionsCount || 0) || 0;
-    reading.cost = Number(reading.cost || 0) || 0;
+    const legacyCost = Number(reading.cost || 0) || 0;
+    reading.costSoles = Number(reading.costSoles ?? legacyCost) || 0;
+    reading.costDolares = Number(reading.costDolares || 0) || 0;
+    reading.cost = reading.costSoles;
     reading.notes = reading.notes || "";
+    reading.invoiceImage = reading.invoiceImage || "";
+    reading.invoiceImageName = reading.invoiceImageName || "";
   }
 
   // Back-compat: tasks sin category -> mission
@@ -1301,12 +1306,21 @@ function renderQuestionReadings(){
       <td>${escapeHtml(e.consultant || "")}</td>
       <td>${e.birthDate ? escapeHtml(new Date(`${e.birthDate}T00:00:00`).toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })) : ""}</td>
       <td><input class="input small" type="number" min="0" data-act="qrQuestionsCount" data-id="${e.id}" value="${Number(e.questionsCount || 0)}" /></td>
-      <td><input class="input small" type="number" min="0" step="0.01" data-act="qrCost" data-id="${e.id}" value="${Number(e.cost || 0)}" /></td>
+      <td><input class="input small" type="number" min="0" step="0.01" data-act="qrCostSoles" data-id="${e.id}" value="${Number(e.costSoles || e.cost || 0)}" /></td>
+      <td><input class="input small" type="number" min="0" step="0.01" data-act="qrCostDolares" data-id="${e.id}" value="${Number(e.costDolares || 0)}" /></td>
       <td><input class="input small" data-act="qrNotes" data-id="${e.id}" value="${escapeAttr(e.notes || "")}" placeholder="Notas" /></td>
+      <td>
+        <div class="invoiceActions">
+          <input type="file" data-act="qrInvoice" data-id="${e.id}" accept="image/*" style="display:none" />
+          <button class="btn ghost" data-act="qrUpload" data-id="${e.id}">${e.invoiceImage ? "Cambiar" : "Subir"}</button>
+          ${e.invoiceImage ? `<button class="btn ghost" data-act="qrViewInvoice" data-id="${e.id}">Ver</button>` : `<span class="subEmpty">Sin imagen</span>`}
+        </div>
+      </td>
       <td><button class="btn ghost" data-act="qrDelete" data-id="${e.id}">🗑</button></td>
     </tr>`).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
 
-  const totalCost = rows.reduce((a,x)=>a+Number(x.cost||0),0);
+  const totalSoles = rows.reduce((a,x)=>a+Number(x.costSoles || x.cost || 0),0);
+  const totalDolares = rows.reduce((a,x)=>a+Number(x.costDolares||0),0);
 
   board.innerHTML = `<div class="subBoard">
     <h4>Lecturas por preguntas</h4>
@@ -1314,11 +1328,11 @@ function renderQuestionReadings(){
       <table class="subTable">
         <thead>
           <tr>
-            <th>Fecha</th><th>Nombre de consultante</th><th>Fecha de nacimiento</th><th>Cantidad de preguntas</th><th>Costo</th><th>Notas</th><th></th>
+            <th>Fecha</th><th>Nombre de consultante</th><th>Fecha de nacimiento</th><th>Cantidad de preguntas</th><th>Costo en soles</th><th>Costo en dólares</th><th>Notas</th><th>Factura</th><th></th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
-        <tfoot><tr><td colspan="4">Totales</td><td>${totalCost}</td><td colspan="2"></td></tr></tfoot>
+        <tfoot><tr><td colspan="4">Totales</td><td>${totalSoles}</td><td>${totalDolares}</td><td colspan="3"></td></tr></tfoot>
       </table>
     </div>
   </div>`;
@@ -1331,10 +1345,14 @@ function addQuestionReading(obj={}){
     consultant: (obj.consultant || "").trim(),
     birthDate: obj.birthDate || "",
     questionsCount: Number(obj.questionsCount || 0) || 0,
-    cost: Number(obj.cost || 0) || 0,
+    costSoles: Number(obj.costSoles || 0) || 0,
+    costDolares: Number(obj.costDolares || 0) || 0,
     notes: obj.notes || "",
+    invoiceImage: obj.invoiceImage || "",
+    invoiceImageName: obj.invoiceImageName || "",
     createdAt: nowISO()
   };
+  entry.cost = entry.costSoles;
   STATE.questionReadings.entries.unshift(entry);
   enqueueEvent("question_reading_add", entry);
   saveState();
@@ -1348,19 +1366,38 @@ function openQuestionReadingModal(){
     <div class="row"><label class="label">Nombre de consultante</label><input id="mQrConsultant" class="input" /></div>
     <div class="row"><label class="label">Fecha de nacimiento</label><input id="mQrBirthDate" type="date" class="input" /></div>
     <div class="row"><label class="label">Cantidad de preguntas</label><input id="mQrQuestionsCount" type="number" class="input" min="0" step="1" /></div>
-    <div class="row"><label class="label">Costo</label><input id="mQrCost" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Costo en soles</label><input id="mQrCostSoles" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Costo en dólares</label><input id="mQrCostDolares" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Imagen de factura</label><input id="mQrInvoice" type="file" class="input" accept="image/*" /></div>
     <div class="row"><label class="label">Notas</label><textarea id="mQrNotes" class="input" rows="3" placeholder="Apunta info adicional"></textarea></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
-  $("#mSave").onclick = () => {
+  $("#mSave").onclick = async () => {
+    const file = $("#mQrInvoice")?.files?.[0];
+    let invoiceImage = "";
+    let invoiceImageName = "";
+    if(file){
+      const b64 = await new Promise((resolve,reject)=>{
+        const fr = new FileReader();
+        fr.onload = () => resolve(fr.result);
+        fr.onerror = reject;
+        fr.readAsDataURL(file);
+      }).catch(()=>null);
+      if(!b64){ toast("No pude leer la imagen."); return; }
+      invoiceImage = String(b64);
+      invoiceImageName = file.name || "";
+    }
     addQuestionReading({
       date: $("#mQrDate").value || todayKey(),
       consultant: $("#mQrConsultant").value,
       birthDate: $("#mQrBirthDate").value,
       questionsCount: $("#mQrQuestionsCount").value,
-      cost: $("#mQrCost").value,
-      notes: $("#mQrNotes").value
+      costSoles: $("#mQrCostSoles").value,
+      costDolares: $("#mQrCostDolares").value,
+      notes: $("#mQrNotes").value,
+      invoiceImage,
+      invoiceImageName
     });
     closeModal();
   };
@@ -2454,18 +2491,56 @@ function wire(){
     renderOneToOneSessions();
   });
 
+  $("#questionReadingsBoard")?.addEventListener("change", async (e) => {
+    const t = e.target;
+    if(t.dataset.act !== "qrInvoice") return;
+    const id = t.dataset.id;
+    const row = STATE.questionReadings.entries.find(x=>x.id===id);
+    if(!row) return;
+    const file = t.files?.[0];
+    if(!file) return;
+    const b64 = await new Promise((resolve,reject)=>{
+      const fr = new FileReader();
+      fr.onload = () => resolve(fr.result);
+      fr.onerror = reject;
+      fr.readAsDataURL(file);
+    }).catch(()=>null);
+    if(!b64){ toast("No pude leer la imagen."); return; }
+    row.invoiceImage = String(b64);
+    row.invoiceImageName = file.name || "";
+    enqueueEvent("question_reading_invoice", { id, invoiceImageName: row.invoiceImageName });
+    saveState();
+    renderQuestionReadings();
+  });
+
   $("#questionReadingsBoard")?.addEventListener("input", (e) => {
     const t = e.target;
-    if(!["qrQuestionsCount", "qrCost", "qrNotes"].includes(t.dataset.act)) return;
+    if(!["qrQuestionsCount", "qrCostSoles", "qrCostDolares", "qrNotes"].includes(t.dataset.act)) return;
     const row = STATE.questionReadings.entries.find(x=>x.id===t.dataset.id);
     if(!row) return;
     if(t.dataset.act === "qrQuestionsCount") row.questionsCount = Number(t.value || 0) || 0;
-    if(t.dataset.act === "qrCost") row.cost = Number(t.value || 0) || 0;
+    if(t.dataset.act === "qrCostSoles"){
+      row.costSoles = Number(t.value || 0) || 0;
+      row.cost = row.costSoles;
+    }
+    if(t.dataset.act === "qrCostDolares") row.costDolares = Number(t.value || 0) || 0;
     if(t.dataset.act === "qrNotes") row.notes = t.value;
     saveState();
-    if(t.dataset.act === "qrCost") renderQuestionReadings();
+    if(["qrCostSoles", "qrCostDolares"].includes(t.dataset.act)) renderQuestionReadings();
   });
   $("#questionReadingsBoard")?.addEventListener("click", (e) => {
+    const viewBtn = e.target.closest("button[data-act='qrViewInvoice']");
+    if(viewBtn){
+      const row = STATE.questionReadings.entries.find(x=>x.id===viewBtn.dataset.id);
+      if(row?.invoiceImage) openImagePreviewModal(row.invoiceImage, `Factura · ${row.consultant || "lectura"}`);
+      return;
+    }
+    const uploadBtn = e.target.closest("button[data-act='qrUpload']");
+    if(uploadBtn){
+      const fileInput = document.querySelector(`input[data-act='qrInvoice'][data-id='${uploadBtn.dataset.id}']`);
+      fileInput?.click();
+      return;
+    }
     const delBtn = e.target.closest("button[data-act='qrDelete']");
     if(!delBtn) return;
     STATE.questionReadings.entries = STATE.questionReadings.entries.filter(x=>x.id!==delBtn.dataset.id);
