@@ -1309,7 +1309,7 @@ function renderQuestionReadings(){
   const totalCost = rows.reduce((a,x)=>a+Number(x.cost||0),0);
 
   board.innerHTML = `<div class="subBoard">
-    <h4>Lecturas por Preguntas</h4>
+    <h4>Lecturas por preguntas</h4>
     <div class="subTableWrap">
       <table class="subTable">
         <thead>
