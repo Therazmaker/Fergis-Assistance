@@ -55,6 +55,7 @@
         <button class="tabBtn" data-tab="contenido">Contenido de hoy</button>
         <button class="tabBtn" data-tab="investigacion">Investigación</button>
         <button class="tabBtn" data-tab="clientes">Clientes y calendario</button>
+        <button class="tabBtn" data-tab="finanzas">Finanzas</button>
         <button class="tabBtn" data-tab="sesiones11">Sesiones 1:1</button>
         <button class="tabBtn" data-tab="suscripcion">Suscripción - Diosa en Guía</button>
         <button class="tabBtn" data-tab="lecturasPreguntas">Lecturas por preguntas</button>
@@ -178,6 +179,7 @@
           </div>
           <div class="filters">
             <select id="nextStepClientFilter" class="input small"></select>
+            <input id="nextStepSearch" class="input small" placeholder="Buscar cliente o paso…" />
           </div>
           <div id="nextStepsList" class="list"></div>
         </section>
@@ -204,6 +206,25 @@
             </div>
           </div>
           <div id="bookingsList" class="list compactList"></div>
+        </section>
+      </section>
+
+      <section class="grid tabPanel" data-panel="finanzas">
+        <section class="card fullSpan">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Finanzas</div>
+              <div class="cardSub">Ingresos acumulados en soles y dólares por clientes.</div>
+            </div>
+            <div class="filters" id="financeRangeFilters">
+              <button class="btn ghost active" data-range="1M">1M</button>
+              <button class="btn ghost" data-range="3M">3M</button>
+              <button class="btn ghost" data-range="6M">6M</button>
+              <button class="btn ghost" data-range="1Y">1A</button>
+            </div>
+          </div>
+          <div class="financeTotals" id="financeTotals"></div>
+          <div id="financeChart" class="financeChart"></div>
         </section>
       </section>
 
