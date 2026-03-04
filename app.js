@@ -149,7 +149,7 @@ const CONTENT_SECTIONS = [
   ["postVideo", "🌻 Post / Video"]
 ];
 
-const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas"];
+const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas","archivo"];
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
   { key:"preguntas", label:"Suscripciones · Preguntas", sessions:10 }
@@ -440,6 +440,7 @@ function normalizeState_(st){
     if(!b.startAt) b.startAt = nowISO();
     if(!b.durationMin) b.durationMin = 60;
     if(typeof b.amount !== "number") b.amount = Number(b.amount || 0) || 0;
+    if(typeof b.amountUsd !== "number") b.amountUsd = Number(b.amountUsd || 0) || 0;
     if(!b.recurrence) b.recurrence = null;
     // Link to CRM client (preferred)
     if(!('clientId' in b)) b.clientId = null;
@@ -506,6 +507,7 @@ function makeBooking_(obj={}){
     startAt: obj.startAt || nowISO(), // ISO
     durationMin: Math.max(15, Number(obj.durationMin || 60) || 60),
     amount: Number(obj.amount || 0) || 0,
+    amountUsd: Number(obj.amountUsd || 0) || 0,
     status: obj.status || "scheduled", // scheduled | done | cancelled
     notes: (obj.notes || "").trim(),
     recurrence: obj.recurrence || null, // { freq:"weekly", interval:1, until:"YYYY-MM-DD" }
@@ -520,6 +522,7 @@ function addBooking(obj){
   saveState();
   renderCalendar();
   renderBookings();
+  renderArchiveBookings();
 }
 
 function updateBooking(id, patch){
@@ -530,6 +533,7 @@ function updateBooking(id, patch){
   saveState();
   renderCalendar();
   renderBookings();
+  renderArchiveBookings();
 }
 
 function deleteBooking(id){
@@ -538,6 +542,7 @@ function deleteBooking(id){
   saveState();
   renderCalendar();
   renderBookings();
+  renderArchiveBookings();
 }
 
 // ---------- Reminders ----------
@@ -854,12 +859,14 @@ function finishSession(status, pauseReason=null){
 function addClient(obj){
   const c = {
     id: uid("cli"),
-    handle: (obj.handle || "").trim(),
+    handle: String(obj.handle || "").trim().replace(/^@+/, ""),
     name: (obj.name || "").trim(),
     status: obj.status || "lead",
     nextStep: (obj.nextStep || "").trim(),
     lastContactAt: obj.lastContactAt || null,
     notes: (obj.notes || "").trim(),
+    dob: obj.dob || "",
+    zodiac: obj.zodiac || "",
     createdAt: nowISO()
   };
   STATE.clients.unshift(c);
@@ -870,6 +877,7 @@ function addClient(obj){
 function updateClient(id, patch){
   const c = STATE.clients.find(x => x.id === id);
   if(!c) return;
+  if("handle" in patch) patch.handle = String(patch.handle || "").trim().replace(/^@+/, "");
   Object.assign(c, patch);
   enqueueEvent("client_update", { id, patch });
   saveState();
@@ -1000,6 +1008,7 @@ function render(){
   renderSessions();
   renderCalendar();
   renderBookings();
+  renderArchiveBookings();
   renderReminders();
   renderClients();
   renderIdeas();
@@ -1756,7 +1765,7 @@ function renderBookings(){
       const b = STATE.bookings.find(x=>x.id===o.bookingId);
       return { o, b };
     })
-    .filter(x => x.b)
+    .filter(x => x.b && (x.b.status||"scheduled") === "scheduled")
     .sort((a,b)=> new Date(a.o.startAt) - new Date(b.o.startAt));
 
   if(!occ.length){
@@ -1775,6 +1784,7 @@ function renderBookings(){
     const when = dt.toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
     const [lbl, cls] = bookingTypeLabel(b.type);
     const amount = b.amount ? ` • S/ ${b.amount}` : "";
+    const amountUsd = b.amountUsd ? ` • $ ${b.amountUsd}` : "";
     const info = getClientForBooking_(b);
     const client = info.display ? ` • ${escapeHtml(info.display)}` : (b.client ? ` • ${escapeHtml(b.client)}` : "");
     const zpill = info.zodiac ? ` <span class="pill mini">${escapeHtml(info.zodiac)}</span>` : "";
@@ -1785,16 +1795,72 @@ function renderBookings(){
       <div class="itemLeft">
         <div>
           <div class="itemTitle">${title}${zpill}</div>
-          <div class="itemMeta">${when}${client}${amount}${rep}</div>
+          <div class="itemMeta">${when}${client}${amount}${amountUsd}${rep}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
         <span class="badge ${cls}">${lbl}</span>
         <span class="badge ${statusBadge[1]}">${statusBadge[0]}</span>
+        <button class="btn" data-act="bookDone" data-id="${b.id}" title="Marcar como hecha">Hecho</button>
         ${(b.sessionRecords||[]).some(r=>r.occStartAt===o.startAt) ? `<span class="pill">log</span>` : ``}
         <button class="btn ghost" data-act="bookSession" data-id="${b.id}" data-occ="${escapeHtml(o.startAt)}" title="Abrir sesión">📝</button>
         <button class="btn ghost" data-act="bookEdit" data-id="${b.id}" title="Editar">✎</button>
         <button class="btn ghost" data-act="bookDel" data-id="${b.id}" title="Eliminar">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderArchiveBookings(){
+  const list = $("#archiveBookingsList");
+  if(!list) return;
+
+  const typeFilter = $("#archiveTypeFilter")?.value || "all";
+  const q = ($("#archiveSearch")?.value || "").trim().toLowerCase();
+
+  let rows = STATE.bookings
+    .filter(b => ["done","cancelled"].includes(b.status||"scheduled"))
+    .slice()
+    .sort((a,b)=> new Date(b.startAt) - new Date(a.startAt));
+
+  if(typeFilter !== "all") rows = rows.filter(b => b.type === typeFilter);
+  if(q){
+    rows = rows.filter((b)=>{
+      const info = getClientForBooking_(b);
+      const bucket = [b.title, b.client, info.display, info.handleShow].join(" ").toLowerCase();
+      return bucket.includes(q);
+    });
+  }
+
+  if(!rows.length){
+    list.innerHTML = `<div class="item">
+      <div class="itemLeft"><div>
+        <div class="itemTitle">Sin sesiones archivadas</div>
+        <div class="itemMeta">Cuando marques una sesión como hecha/cancelada aparecerá aquí.</div>
+      </div></div>
+    </div>`;
+    return;
+  }
+
+  list.innerHTML = rows.map((b)=>{
+    const dt = new Date(b.startAt);
+    const when = dt.toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+    const [lbl, cls] = bookingTypeLabel(b.type);
+    const info = getClientForBooking_(b);
+    const amountPen = b.amount ? ` • S/ ${b.amount}` : "";
+    const amountUsd = b.amountUsd ? ` • $ ${b.amountUsd}` : "";
+    const statusBadge = b.status === "done" ? ["Hecha","ok"] : ["Cancelada","warn"];
+    return `<div class="item">
+      <div class="itemLeft">
+        <div>
+          <div class="itemTitle">${escapeHtml(b.title || lbl)}</div>
+          <div class="itemMeta">${escapeHtml(when)} • ${escapeHtml(info.display || b.client || "(sin cliente)")}${amountPen}${amountUsd}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span class="badge ${cls}">${lbl}</span>
+        <span class="badge ${statusBadge[1]}">${statusBadge[0]}</span>
+        <button class="btn ghost" data-act="bookEdit" data-id="${b.id}" title="Editar">✎</button>
       </div>
     </div>`;
   }).join("");
@@ -2035,6 +2101,14 @@ function wire(){
         const occStartAt = btn.dataset.occ || null;
         openClientSessionModal(id, occStartAt);
       }
+      if(act === "bookDone"){
+        updateBooking(id, { status:"done" });
+        if(STATE.activeTab !== "archivo"){
+          STATE.activeTab = "archivo";
+          saveState();
+          renderTabs();
+        }
+      }
       if(act === "bookEdit") openBookingModal(id);
       if(act === "bookDel"){
         openModal(
@@ -2045,6 +2119,21 @@ function wire(){
         $("#mCancel").onclick = closeModal;
         $("#mOk").onclick = ()=>{ deleteBooking(id); closeModal(); };
       }
+    });
+  }
+
+  const archiveTypeFilter = $("#archiveTypeFilter");
+  const archiveSearch = $("#archiveSearch");
+  const archiveList = $("#archiveBookingsList");
+  if(archiveTypeFilter) archiveTypeFilter.addEventListener("change", renderArchiveBookings);
+  if(archiveSearch) archiveSearch.addEventListener("input", renderArchiveBookings);
+  if(archiveList){
+    archiveList.addEventListener("click", (e)=>{
+      const btn = e.target.closest("button[data-act]");
+      if(!btn) return;
+      const act = btn.dataset.act;
+      const id = btn.dataset.id;
+      if(act === "bookEdit") openBookingModal(id);
     });
   }
 
@@ -3065,6 +3154,11 @@ function openBookingModal(bookingId=null, opts={}){
       </div>
 
       <div class="row">
+        <label class="label">Costo en dólares ($)</label>
+        <input id="mBAmtUsd" type="number" class="input" value="${escapeHtml(String(b?.amountUsd ?? 0))}" min="0" step="0.01" />
+      </div>
+
+      <div class="row">
         <label class="label">Estado</label>
         <select id="mBStatus" class="input">
           <option value="scheduled" ${(b?.status||"scheduled")==="scheduled"?"selected":""}>Programada</option>
@@ -3109,6 +3203,7 @@ function openBookingModal(bookingId=null, opts={}){
     const startAt = parseInputDateTimeLocal($("#mBStart").value);
     const durationMin = Number($("#mBDur").value || 60) || 60;
     const amount = Number($("#mBAmt").value || 0) || 0;
+    const amountUsd = Number($("#mBAmtUsd").value || 0) || 0;
     const status = $("#mBStatus").value || "scheduled";
     const notes = $("#mBNotes").value;
 
@@ -3118,7 +3213,7 @@ function openBookingModal(bookingId=null, opts={}){
     const until = $("#mBUntil").value || null;
     const recurrence = repeat ? { freq:"weekly", interval:1, until } : null;
 
-    const payload = { type, clientId, client, title, startAt, durationMin, amount, status, notes, recurrence };
+    const payload = { type, clientId, client, title, startAt, durationMin, amount, amountUsd, status, notes, recurrence };
     if(isEdit) updateBooking(bookingId, payload);
     else addBooking(payload);
     closeModal();
