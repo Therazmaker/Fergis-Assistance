@@ -144,7 +144,7 @@
         </section>
       </section>
 
-      <section class="grid tabPanel" data-panel="clientes">
+      <section class="grid tabPanel clientsGrid" data-panel="clientes">
         <section class="card">
           <div class="cardHead">
             <div>
@@ -166,6 +166,20 @@
             <input id="clientSearch" class="input small" placeholder="Buscar…" />
           </div>
           <div id="clientsList" class="list"></div>
+        </section>
+
+        <section class="card">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Próximos pasos</div>
+              <div class="cardSub">Selecciona cliente y registra lead, seguimiento u otras acciones.</div>
+            </div>
+            <button class="btn" id="btnAddNextStep">+ Paso</button>
+          </div>
+          <div class="filters">
+            <select id="nextStepClientFilter" class="input small"></select>
+          </div>
+          <div id="nextStepsList" class="list"></div>
         </section>
 
         <section class="card">

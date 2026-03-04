@@ -44,7 +44,7 @@ body{
 .subtitle{font-size:12px;color:var(--muted);margin-top:2px}
 .topActions{display:flex;gap:8px}
 
-.main{width:min(1100px, 96vw);margin:18px auto 28px;flex:1}
+.main{width:min(1380px, 98vw);margin:18px auto 28px;flex:1}
 .card{
   background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
   border:1px solid var(--line);
@@ -73,7 +73,9 @@ body{
   margin-top:14px;
   display:flex;
   gap:8px;
-  flex-wrap:wrap;
+  flex-wrap:nowrap;
+  overflow-x:auto;
+  padding-bottom:4px;
 }
 .tabBtn{
   border:1px solid var(--line);
@@ -95,10 +97,12 @@ body{
   grid-template-columns: 1fr 1fr;
   gap:14px;
 }
+.clientsGrid{grid-template-columns: minmax(280px,1fr) minmax(280px,1fr) minmax(420px,1.35fr);}
 .grid.tabPanel{display:none}
 .grid.tabPanel.active{display:grid}
 @media (max-width: 940px){
   .grid{grid-template-columns:1fr}
+  .clientsGrid{grid-template-columns:1fr}
   .heroCard{flex-direction:column}
   .heroRight{justify-content:flex-start}
 }

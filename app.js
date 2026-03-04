@@ -212,6 +212,7 @@ function loadState(){
     bookings: [],
     reminders: [],
     clients: [],
+    nextSteps: [],
     ideas: [],
     eventQueue: [],  // para sync incremental
     planWeekId: null,
@@ -350,6 +351,7 @@ function normalizeState_(st){
   st.bookings = Array.isArray(st.bookings) ? st.bookings : [];
   st.reminders = Array.isArray(st.reminders) ? st.reminders : [];
   st.clients = Array.isArray(st.clients) ? st.clients : [];
+  st.nextSteps = Array.isArray(st.nextSteps) ? st.nextSteps : [];
   st.ideas = Array.isArray(st.ideas) ? st.ideas : [];
   st.eventQueue = Array.isArray(st.eventQueue) ? st.eventQueue : [];
   st.planWeekId = st.planWeekId || null;
@@ -431,6 +433,17 @@ function normalizeState_(st){
     if(!c.notes) c.notes = c.notes || "";
     if(!c.dob) c.dob = c.dob || "";           // YYYY-MM-DD
     if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
+  }
+
+
+  for(const step of st.nextSteps){
+    if(!step.id) step.id = uid("nstep");
+    step.clientId = step.clientId || "";
+    step.clientName = (step.clientName || "").trim();
+    step.kind = step.kind || "seguimiento";
+    step.nextStep = (step.nextStep || "").trim();
+    step.notes = (step.notes || "").trim();
+    step.createdAt = step.createdAt || nowISO();
   }
 
   // Back-compat: bookings + reminders
@@ -873,6 +886,7 @@ function addClient(obj){
   enqueueEvent("client_add", c);
   saveState();
   renderClients();
+  renderNextSteps();
 }
 function updateClient(id, patch){
   const c = STATE.clients.find(x => x.id === id);
@@ -882,12 +896,50 @@ function updateClient(id, patch){
   enqueueEvent("client_update", { id, patch });
   saveState();
   renderClients();
+  renderNextSteps();
 }
 function deleteClient(id){
   STATE.clients = STATE.clients.filter(x => x.id !== id);
+  STATE.nextSteps = STATE.nextSteps.filter(x => x.clientId !== id);
   enqueueEvent("client_delete", { id });
   saveState();
   renderClients();
+  renderNextSteps();
+}
+
+function addNextStep(obj){
+  const c = STATE.clients.find(x => x.id === obj.clientId);
+  const row = {
+    id: uid("nstep"),
+    clientId: obj.clientId || "",
+    clientName: c?.name || c?.handle || obj.clientName || "(sin cliente)",
+    kind: obj.kind || "seguimiento",
+    nextStep: (obj.nextStep || "").trim(),
+    notes: (obj.notes || "").trim(),
+    createdAt: nowISO()
+  };
+  STATE.nextSteps.unshift(row);
+  enqueueEvent("next_step_add", row);
+  saveState();
+  renderNextSteps();
+}
+function updateNextStep(id, patch){
+  const row = STATE.nextSteps.find(x => x.id === id);
+  if(!row) return;
+  if("clientId" in patch){
+    const c = STATE.clients.find(x => x.id === patch.clientId);
+    patch.clientName = c?.name || c?.handle || row.clientName;
+  }
+  Object.assign(row, patch);
+  enqueueEvent("next_step_update", { id, patch });
+  saveState();
+  renderNextSteps();
+}
+function deleteNextStep(id){
+  STATE.nextSteps = STATE.nextSteps.filter(x => x.id !== id);
+  enqueueEvent("next_step_delete", { id });
+  saveState();
+  renderNextSteps();
 }
 
 function addIdea(obj){
@@ -1011,6 +1063,7 @@ function render(){
   renderArchiveBookings();
   renderReminders();
   renderClients();
+  renderNextSteps();
   renderIdeas();
   renderMetrics();
   renderTabs();
@@ -1606,6 +1659,49 @@ function renderClients(){
         <span class="badge ${cls}">${lbl}</span>
         <button class="btn ghost" data-act="clientEdit" data-id="${c.id}" title="Editar">✎</button>
         <button class="btn ghost" data-act="clientDel" data-id="${c.id}" title="Eliminar">🗑</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderNextSteps(){
+  const list = $("#nextStepsList");
+  const sel = $("#nextStepClientFilter");
+  if(!list || !sel) return;
+
+  const selected = sel.value || "all";
+  sel.innerHTML = [
+    '<option value="all">Todos los clientes</option>',
+    ...STATE.clients.map(c=>{
+      const name = c.name || c.handle || "(sin nombre)";
+      return `<option value="${c.id}" ${selected===c.id?"selected":""}>${escapeHtml(name)}</option>`;
+    })
+  ].join("");
+
+  let rows = [...STATE.nextSteps];
+  const filterVal = sel.value || "all";
+  if(filterVal !== "all") rows = rows.filter(x => x.clientId === filterVal);
+
+  if(!rows.length){
+    list.innerHTML = `<div class="item"><div class="itemLeft"><div><div class="itemTitle">Sin próximos pasos</div><div class="itemMeta">Registra un seguimiento para que aparezca aquí.</div></div></div></div>`;
+    return;
+  }
+
+  list.innerHTML = rows.slice(0,30).map(r => {
+    const dt = new Date(r.createdAt).toLocaleDateString();
+    const next = r.nextStep || "—";
+    const notes = r.notes ? `<div class="itemMeta">Notas: ${escapeHtml(r.notes)}</div>` : "";
+    return `<div class="item">
+      <div class="itemLeft">
+        <div>
+          <div class="itemTitle">${escapeHtml(r.clientName || "(sin cliente)")}</div>
+          <div class="itemMeta"><b>${escapeHtml(r.kind || "paso")}</b> • ${escapeHtml(next)} • ${escapeHtml(dt)}</div>
+          ${notes}
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn ghost" data-act="nextStepEdit" data-id="${r.id}" title="Editar">✎</button>
+        <button class="btn ghost" data-act="nextStepDel" data-id="${r.id}" title="Eliminar">🗑</button>
       </div>
     </div>`;
   }).join("");
@@ -2314,6 +2410,8 @@ function wire(){
   });
 
   $("#btnAddClient").addEventListener("click", () => openClientModal());
+  $("#btnAddNextStep")?.addEventListener("click", () => openNextStepModal());
+  $("#nextStepClientFilter")?.addEventListener("change", renderNextSteps);
   $("#btnAddIdea").addEventListener("click", () => openIdeaModal());
 
   $("#clientsList").addEventListener("click", (e) => {
@@ -2330,6 +2428,25 @@ function wire(){
       );
       $("#mCancel").onclick = closeModal;
       $("#mOk").onclick = () => { deleteClient(id); closeModal(); };
+    }
+  });
+
+
+
+  $("#nextStepsList")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-act]");
+    if(!btn) return;
+    const act = btn.dataset.act;
+    const id = btn.dataset.id;
+    if(act==="nextStepEdit") openNextStepModal(id);
+    if(act==="nextStepDel"){
+      openModal(
+        "Eliminar próximo paso",
+        `<div class="itemMeta">Se borrará este registro de seguimiento.</div>`,
+        `<button class="btn" id="mCancel">Cancelar</button><button class="btn warn" id="mOk">Eliminar</button>`
+      );
+      $("#mCancel").onclick = closeModal;
+      $("#mOk").onclick = () => { deleteNextStep(id); closeModal(); };
     }
   });
 
@@ -2827,6 +2944,61 @@ function openClientModal(clientId=null){
       if(act==="cOpenSession"){ closeModal(); openClientSessionModal(id, occ); }
     }, { once: true });
   }
+}
+
+function openNextStepModal(stepId=null){
+  const isEdit = !!stepId;
+  const step = isEdit ? STATE.nextSteps.find(x=>x.id===stepId) : null;
+
+  openModal(
+    isEdit ? "Editar próximo paso" : "Registrar próximo paso",
+    `
+      <div class="row">
+        <label class="label">Cliente</label>
+        <select id="mNSClient" class="input">
+          <option value="">Selecciona cliente</option>
+          ${STATE.clients.map(c=>{
+            const name = c.name || c.handle || "(sin nombre)";
+            return `<option value="${c.id}" ${(step?.clientId===c.id)?"selected":""}>${escapeHtml(name)}</option>`;
+          }).join("")}
+        </select>
+      </div>
+      <div class="row">
+        <label class="label">Tipo</label>
+        <select id="mNSKind" class="input">
+          ${["seguimiento","lead","cotización","pago","sesión"].map(k=>`<option value="${k}" ${(step?.kind===k)?"selected":""}>${k}</option>`).join("")}
+        </select>
+      </div>
+      <div class="row">
+        <label class="label">Próximo paso</label>
+        <input id="mNSStep" class="input" value="${escapeHtml(step?.nextStep||"")}" placeholder="Ej: enviar audio resumen mañana" />
+      </div>
+      <div class="row">
+        <label class="label">Notas</label>
+        <textarea id="mNSNotes" class="input" style="min-height:140px;resize:vertical" placeholder="Detalles de seguimiento, contexto, acuerdos...">${escapeHtml(step?.notes||"")}</textarea>
+      </div>
+    `,
+    `
+      <button class="btn" id="mCancel">Cancelar</button>
+      <button class="btn primary" id="mOk">${isEdit ? "Guardar" : "Registrar"}</button>
+    `
+  );
+
+  $("#mCancel").onclick = closeModal;
+  $("#mOk").onclick = () => {
+    const clientId = $("#mNSClient").value || "";
+    if(!clientId){ toast("Selecciona un cliente"); return; }
+    const payload = {
+      clientId,
+      kind: $("#mNSKind").value,
+      nextStep: $("#mNSStep").value,
+      notes: $("#mNSNotes").value
+    };
+    if(!payload.nextStep.trim()){ toast("Escribe el próximo paso"); return; }
+    if(isEdit) updateNextStep(stepId, payload);
+    else addNextStep(payload);
+    closeModal();
+  };
 }
 
 function openIdeaModal(ideaId=null){
