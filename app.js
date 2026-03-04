@@ -149,7 +149,7 @@ const CONTENT_SECTIONS = [
   ["postVideo", "🌻 Post / Video"]
 ];
 
-const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas","archivo"];
+const APP_TABS = ["plan","contenido","investigacion","clientes","finanzas","sesiones11","suscripcion","lecturasPreguntas","archivo"];
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
   { key:"preguntas", label:"Suscripciones · Preguntas", sessions:10 }
@@ -238,7 +238,8 @@ function loadState(){
       viewYear: new Date().getFullYear(),
       viewMonth: new Date().getMonth()+1,
       entries: []
-    }
+    },
+    financeRange: "1M"
   };
 }
 function openStateDB(){
@@ -364,6 +365,7 @@ function normalizeState_(st){
   st.contentTodo.historyOrder = Array.isArray(st.contentTodo.historyOrder) ? st.contentTodo.historyOrder : [];
 
   st.activeTab = APP_TABS.includes(st.activeTab) ? st.activeTab : "plan";
+  st.financeRange = ["1M","3M","6M","1Y"].includes(st.financeRange) ? st.financeRange : "1M";
   st.subscriptions = st.subscriptions || {};
   st.subscriptions.viewYear = Number(st.subscriptions.viewYear || new Date().getFullYear());
   st.subscriptions.viewMonth = Number(st.subscriptions.viewMonth || (new Date().getMonth()+1));
@@ -433,6 +435,8 @@ function normalizeState_(st){
     if(!c.notes) c.notes = c.notes || "";
     if(!c.dob) c.dob = c.dob || "";           // YYYY-MM-DD
     if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
+    c.paidSolesManual = Number(c.paidSolesManual || 0) || 0;
+    c.paidDolaresManual = Number(c.paidDolaresManual || 0) || 0;
   }
 
 
@@ -880,6 +884,8 @@ function addClient(obj){
     notes: (obj.notes || "").trim(),
     dob: obj.dob || "",
     zodiac: obj.zodiac || "",
+    paidSolesManual: Number(obj.paidSolesManual || 0) || 0,
+    paidDolaresManual: Number(obj.paidDolaresManual || 0) || 0,
     createdAt: nowISO()
   };
   STATE.clients.unshift(c);
@@ -1064,6 +1070,7 @@ function render(){
   renderReminders();
   renderClients();
   renderNextSteps();
+  renderFinance();
   renderIdeas();
   renderMetrics();
   renderTabs();
@@ -1680,7 +1687,9 @@ function renderNextSteps(){
 
   let rows = [...STATE.nextSteps];
   const filterVal = sel.value || "all";
+  const q = ($("#nextStepSearch")?.value || "").trim().toLowerCase();
   if(filterVal !== "all") rows = rows.filter(x => x.clientId === filterVal);
+  if(q) rows = rows.filter(x => (`${x.clientName} ${x.nextStep} ${x.notes}`).toLowerCase().includes(q));
 
   if(!rows.length){
     list.innerHTML = `<div class="item"><div class="itemLeft"><div><div class="itemTitle">Sin próximos pasos</div><div class="itemMeta">Registra un seguimiento para que aparezca aquí.</div></div></div></div>`;
@@ -1705,6 +1714,161 @@ function renderNextSteps(){
       </div>
     </div>`;
   }).join("");
+}
+
+function financeDateFromEntry(entry){
+  return entry.date || entry.paymentDate || entry.startAt || todayKey();
+}
+
+function buildFinanceEntries(){
+  const entries = [];
+
+  for(const b of STATE.bookings){
+    entries.push({
+      source: "booking",
+      clientId: b.clientId || null,
+      clientName: b.client || "",
+      date: String(b.startAt || "").slice(0,10),
+      soles: Number(b.amount || 0) || 0,
+      dolares: Number(b.amountUsd || 0) || 0
+    });
+  }
+
+  for(const sub of STATE.subscriptions.entries){
+    const c = findClientByBookingClientString(sub.name || "");
+    entries.push({
+      source: "subscription",
+      clientId: c?.id || null,
+      clientName: sub.name || "",
+      date: sub.paymentDate || todayKey(),
+      soles: Number(sub.costSoles || 0) || 0,
+      dolares: Number(sub.costDolares || 0) || 0
+    });
+  }
+
+  for(const sess of STATE.oneToOneSessions.entries){
+    const c = findClientByBookingClientString(sess.consultant || sess.contact || "");
+    entries.push({
+      source: "oneToOne",
+      clientId: c?.id || null,
+      clientName: sess.consultant || sess.contact || "",
+      date: sess.date || todayKey(),
+      soles: Number(sess.costSoles || 0) || 0,
+      dolares: Number(sess.costDolares || 0) || 0
+    });
+  }
+
+  for(const qr of STATE.questionReadings.entries){
+    const c = findClientByBookingClientString(qr.consultant || "");
+    entries.push({
+      source: "questionReading",
+      clientId: c?.id || null,
+      clientName: qr.consultant || "",
+      date: qr.date || todayKey(),
+      soles: Number(qr.costSoles || qr.cost || 0) || 0,
+      dolares: Number(qr.costDolares || 0) || 0
+    });
+  }
+
+  return entries.filter(x => x.soles > 0 || x.dolares > 0);
+}
+
+function totalsByClient(clientId){
+  const entries = buildFinanceEntries().filter(x => String(x.clientId) === String(clientId));
+  return {
+    soles: entries.reduce((a,x)=>a + Number(x.soles || 0), 0),
+    dolares: entries.reduce((a,x)=>a + Number(x.dolares || 0), 0)
+  };
+}
+
+function renderFinance(){
+  const totalsEl = $("#financeTotals");
+  const chartEl = $("#financeChart");
+  const rangeWrap = $("#financeRangeFilters");
+  if(!totalsEl || !chartEl || !rangeWrap) return;
+
+  const months = { "1M": 1, "3M": 3, "6M": 6, "1Y": 12 };
+  const monthsBack = months[STATE.financeRange] || 1;
+  const end = new Date();
+  end.setHours(23,59,59,999);
+  const start = new Date(end);
+  start.setMonth(start.getMonth() - monthsBack);
+  start.setHours(0,0,0,0);
+
+  const rows = buildFinanceEntries().filter((x) => {
+    const d = new Date(`${financeDateFromEntry(x)}T00:00:00`);
+    return d >= start && d <= end;
+  }).sort((a,b)=> new Date(financeDateFromEntry(a)) - new Date(financeDateFromEntry(b)));
+
+  const totalS = rows.reduce((a,x)=>a + x.soles, 0);
+  const totalD = rows.reduce((a,x)=>a + x.dolares, 0);
+
+  totalsEl.innerHTML = `
+    <div class="metric"><div class="metricLabel">Total en soles</div><div class="metricValue">S/ ${totalS.toFixed(2)}</div></div>
+    <div class="metric"><div class="metricLabel">Total en dólares</div><div class="metricValue">US$ ${totalD.toFixed(2)}</div></div>
+    <div class="metric"><div class="metricLabel">Movimientos</div><div class="metricValue">${rows.length}</div></div>
+  `;
+
+  rangeWrap.querySelectorAll("button[data-range]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.range === STATE.financeRange);
+  });
+
+  if(!rows.length){
+    chartEl.innerHTML = `<div class="item"><div class="itemMeta">Sin ingresos en el periodo seleccionado.</div></div>`;
+    return;
+  }
+
+  const byDay = new Map();
+  rows.forEach((r)=>{
+    const key = financeDateFromEntry(r);
+    if(!byDay.has(key)) byDay.set(key, { soles: 0, dolares: 0 });
+    const day = byDay.get(key);
+    day.soles += r.soles;
+    day.dolares += r.dolares;
+  });
+
+  const dayKeys = [...byDay.keys()].sort();
+  let accS = 0;
+  let accD = 0;
+  const series = dayKeys.map((k)=>{
+    const row = byDay.get(k);
+    accS += row.soles;
+    accD += row.dolares;
+    return { key: k, soles: accS, dolares: accD };
+  });
+
+  const maxY = Math.max(...series.map(x => Math.max(x.soles, x.dolares)), 1);
+  const w = 760;
+  const h = 240;
+  const p = 26;
+  const xFor = (idx) => p + (idx * ((w - p*2) / Math.max(series.length-1, 1)));
+  const yFor = (v) => h - p - ((v / maxY) * (h - p*2));
+  const solesPath = series.map((v,i)=>`${xFor(i)},${yFor(v.soles)}`).join(" ");
+  const usdPath = series.map((v,i)=>`${xFor(i)},${yFor(v.dolares)}`).join(" ");
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((r)=>{
+    const y = yFor(maxY*r);
+    return `<line x1="${p}" y1="${y}" x2="${w-p}" y2="${y}" class="chartGrid" />`;
+  }).join("");
+
+  const labels = [0, Math.floor((series.length-1)/2), series.length-1]
+    .filter((v, i, arr)=>arr.indexOf(v)===i)
+    .map((idx)=>{
+      const d = new Date(`${series[idx].key}T00:00:00`);
+      return `<text x="${xFor(idx)}" y="${h-8}" class="chartLabel" text-anchor="middle">${d.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit' })}</text>`;
+    }).join("");
+
+  chartEl.innerHTML = `
+    <svg viewBox="0 0 ${w} ${h}" class="financeSvg" role="img" aria-label="Ingresos por fecha">
+      ${ticks}
+      <polyline points="${solesPath}" class="chartLine soles" />
+      <polyline points="${usdPath}" class="chartLine dolares" />
+      ${labels}
+    </svg>
+    <div class="financeLegend">
+      <span><i class="legendDot soles"></i>Soles</span>
+      <span><i class="legendDot dolares"></i>Dólares</span>
+    </div>
+  `;
 }
 
 function renderIdeas(){
@@ -2412,6 +2576,14 @@ function wire(){
   $("#btnAddClient").addEventListener("click", () => openClientModal());
   $("#btnAddNextStep")?.addEventListener("click", () => openNextStepModal());
   $("#nextStepClientFilter")?.addEventListener("change", renderNextSteps);
+  $("#nextStepSearch")?.addEventListener("input", renderNextSteps);
+  $("#financeRangeFilters")?.addEventListener("click", (e) => {
+    const btn = e.target.closest("button[data-range]");
+    if(!btn) return;
+    STATE.financeRange = btn.dataset.range;
+    saveState();
+    renderFinance();
+  });
   $("#btnAddIdea").addEventListener("click", () => openIdeaModal());
 
   $("#clientsList").addEventListener("click", (e) => {
@@ -2892,9 +3064,23 @@ function openClientModal(clientId=null){
         <div class="itemMeta">Tip: si lo dejas vacío pero hay fecha, al guardar se autocompleta.</div>
       </div>
 
-<div class="row">
-        <label class="label">Próximo paso</label>
-        <input id="mCNext" class="input" value="${escapeHtml(c?.nextStep||"")}" placeholder="Ej: enviar propuesta / pedir fecha de nacimiento" />
+      <div class="financeMiniCard">
+        ${(() => {
+          const totals = c ? totalsByClient(c.id) : { soles: 0, dolares: 0 };
+          const manualS = Number(c?.paidSolesManual || 0) || 0;
+          const manualD = Number(c?.paidDolaresManual || 0) || 0;
+          return `<div class="itemTitle">Pagado por cliente</div>
+            <div class="itemMeta">Automático: <b>S/ ${(totals.soles).toFixed(2)}</b> • <b>US$ ${(totals.dolares).toFixed(2)}</b></div>
+            <div class="itemMeta">Manual extra: S/ ${manualS.toFixed(2)} • US$ ${manualD.toFixed(2)}</div>`;
+        })()}
+      </div>
+      <div class="row">
+        <label class="label">Pago manual extra (soles)</label>
+        <input id="mCPaidSolesManual" type="number" step="0.01" min="0" class="input" value="${escapeHtml(String(c?.paidSolesManual || ""))}" />
+      </div>
+      <div class="row">
+        <label class="label">Pago manual extra (dólares)</label>
+        <input id="mCPaidDolaresManual" type="number" step="0.01" min="0" class="input" value="${escapeHtml(String(c?.paidDolaresManual || ""))}" />
       </div>
       <div class="row">
         <label class="label">Notas</label>
@@ -2915,10 +3101,11 @@ function openClientModal(clientId=null){
       name: $("#mCName").value,
       handle: $("#mCHandle").value,
       status: $("#mCStatus").value,
-      nextStep: $("#mCNext").value,
       notes: $("#mCNotes").value,
       dob: $("#mCDob").value,
-      zodiac: $("#mCZodiac").value
+      zodiac: $("#mCZodiac").value,
+      paidSolesManual: Number($("#mCPaidSolesManual")?.value || 0) || 0,
+      paidDolaresManual: Number($("#mCPaidDolaresManual")?.value || 0) || 0
     };
     if(obj.dob && !obj.zodiac) obj.zodiac = zodiacFromDob(obj.dob);
 
