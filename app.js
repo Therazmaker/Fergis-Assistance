@@ -149,7 +149,7 @@ const CONTENT_SECTIONS = [
   ["postVideo", "🌻 Post / Video"]
 ];
 
-const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion"];
+const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas"];
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
   { key:"preguntas", label:"Suscripciones · Preguntas", sessions:10 }
@@ -229,6 +229,11 @@ function loadState(){
       entries: []
     },
     oneToOneSessions: {
+      viewYear: new Date().getFullYear(),
+      viewMonth: new Date().getMonth()+1,
+      entries: []
+    },
+    questionReadings: {
       viewYear: new Date().getFullYear(),
       viewMonth: new Date().getMonth()+1,
       entries: []
@@ -390,6 +395,20 @@ function normalizeState_(st){
     sess.costDolares = Number(sess.costDolares || 0) || 0;
     sess.invoiceImage = sess.invoiceImage || "";
     sess.invoiceImageName = sess.invoiceImageName || "";
+  }
+
+  st.questionReadings = st.questionReadings || {};
+  st.questionReadings.viewYear = Number(st.questionReadings.viewYear || new Date().getFullYear());
+  st.questionReadings.viewMonth = Number(st.questionReadings.viewMonth || (new Date().getMonth()+1));
+  st.questionReadings.entries = Array.isArray(st.questionReadings.entries) ? st.questionReadings.entries : [];
+  for(const reading of st.questionReadings.entries){
+    if(!reading.id) reading.id = uid("qr");
+    reading.date = reading.date || todayKey();
+    reading.consultant = (reading.consultant || "").trim();
+    reading.birthDate = reading.birthDate || "";
+    reading.questionsCount = Number(reading.questionsCount || 0) || 0;
+    reading.cost = Number(reading.cost || 0) || 0;
+    reading.notes = reading.notes || "";
   }
 
   // Back-compat: tasks sin category -> mission
@@ -983,6 +1002,7 @@ function render(){
   renderTabs();
   renderSubscriptions();
   renderOneToOneSessions();
+  renderQuestionReadings();
   updateSyncUI();
 }
 
@@ -1253,6 +1273,94 @@ function openOneToOneSessionModal(){
       costDolares: $("#mS11Dol").value,
       invoiceImage,
       invoiceImageName
+    });
+    closeModal();
+  };
+}
+
+function renderQuestionReadings(){
+  const ySel = $("#questionReadingsYear");
+  const mSel = $("#questionReadingsMonth");
+  const board = $("#questionReadingsBoard");
+  if(!ySel || !mSel || !board) return;
+
+  const years = new Set([STATE.questionReadings.viewYear, ...STATE.questionReadings.entries.map(e => new Date(`${e.date}T00:00:00`).getFullYear())]);
+  const sortedYears = [...years].filter(Boolean).sort((a,b)=>b-a);
+  ySel.innerHTML = sortedYears.map(y=>`<option value="${y}" ${Number(y)===Number(STATE.questionReadings.viewYear)?"selected":""}>${y}</option>`).join("");
+  mSel.innerHTML = MONTHS_ES.map((m,idx)=>`<option value="${idx+1}" ${(idx+1)===Number(STATE.questionReadings.viewMonth)?"selected":""}>${m}</option>`).join("");
+
+  const vY = Number(STATE.questionReadings.viewYear);
+  const vM = Number(STATE.questionReadings.viewMonth);
+  const rows = STATE.questionReadings.entries.filter(e=>{
+    const d = new Date(`${e.date}T00:00:00`);
+    return d.getFullYear()===vY && (d.getMonth()+1)===vM;
+  });
+
+  const body = rows.length ? rows.map((e)=>`<tr>
+      <td>${escapeHtml(new Date(`${e.date}T00:00:00`).toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' }))}</td>
+      <td>${escapeHtml(e.consultant || "")}</td>
+      <td>${e.birthDate ? escapeHtml(new Date(`${e.birthDate}T00:00:00`).toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })) : ""}</td>
+      <td><input class="input small" type="number" min="0" data-act="qrQuestionsCount" data-id="${e.id}" value="${Number(e.questionsCount || 0)}" /></td>
+      <td><input class="input small" type="number" min="0" step="0.01" data-act="qrCost" data-id="${e.id}" value="${Number(e.cost || 0)}" /></td>
+      <td><input class="input small" data-act="qrNotes" data-id="${e.id}" value="${escapeAttr(e.notes || "")}" placeholder="Notas" /></td>
+      <td><button class="btn ghost" data-act="qrDelete" data-id="${e.id}">🗑</button></td>
+    </tr>`).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
+
+  const totalCost = rows.reduce((a,x)=>a+Number(x.cost||0),0);
+
+  board.innerHTML = `<div class="subBoard">
+    <h4>Lecturas por Preguntas</h4>
+    <div class="subTableWrap">
+      <table class="subTable">
+        <thead>
+          <tr>
+            <th>Fecha</th><th>Nombre de consultante</th><th>Fecha de nacimiento</th><th>Cantidad de preguntas</th><th>Costo</th><th>Notas</th><th></th>
+          </tr>
+        </thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr><td colspan="4">Totales</td><td>${totalCost}</td><td colspan="2"></td></tr></tfoot>
+      </table>
+    </div>
+  </div>`;
+}
+
+function addQuestionReading(obj={}){
+  const entry = {
+    id: uid("qr"),
+    date: obj.date || todayKey(),
+    consultant: (obj.consultant || "").trim(),
+    birthDate: obj.birthDate || "",
+    questionsCount: Number(obj.questionsCount || 0) || 0,
+    cost: Number(obj.cost || 0) || 0,
+    notes: obj.notes || "",
+    createdAt: nowISO()
+  };
+  STATE.questionReadings.entries.unshift(entry);
+  enqueueEvent("question_reading_add", entry);
+  saveState();
+  renderQuestionReadings();
+}
+
+function openQuestionReadingModal(){
+  openModal(
+    "Nueva lectura por preguntas",
+    `<div class="row"><label class="label">Fecha</label><input id="mQrDate" type="date" class="input" value="${todayKey()}" /></div>
+    <div class="row"><label class="label">Nombre de consultante</label><input id="mQrConsultant" class="input" /></div>
+    <div class="row"><label class="label">Fecha de nacimiento</label><input id="mQrBirthDate" type="date" class="input" /></div>
+    <div class="row"><label class="label">Cantidad de preguntas</label><input id="mQrQuestionsCount" type="number" class="input" min="0" step="1" /></div>
+    <div class="row"><label class="label">Costo</label><input id="mQrCost" type="number" class="input" min="0" step="0.01" /></div>
+    <div class="row"><label class="label">Notas</label><textarea id="mQrNotes" class="input" rows="3" placeholder="Apunta info adicional"></textarea></div>`,
+    `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
+  );
+  $("#mCancel").onclick = closeModal;
+  $("#mSave").onclick = () => {
+    addQuestionReading({
+      date: $("#mQrDate").value || todayKey(),
+      consultant: $("#mQrConsultant").value,
+      birthDate: $("#mQrBirthDate").value,
+      questionsCount: $("#mQrQuestionsCount").value,
+      cost: $("#mQrCost").value,
+      notes: $("#mQrNotes").value
     });
     closeModal();
   };
@@ -2227,10 +2335,13 @@ function wire(){
 
   $("#btnAddSubscription")?.addEventListener("click", openSubscriptionModal);
   $("#btnAddOneToOneSession")?.addEventListener("click", openOneToOneSessionModal);
+  $("#btnAddQuestionReading")?.addEventListener("click", openQuestionReadingModal);
   $("#subscriptionYear")?.addEventListener("change", (e)=>{ STATE.subscriptions.viewYear = Number(e.target.value); saveState(); renderSubscriptions(); });
   $("#subscriptionMonth")?.addEventListener("change", (e)=>{ STATE.subscriptions.viewMonth = Number(e.target.value); saveState(); renderSubscriptions(); });
   $("#oneToOneYear")?.addEventListener("change", (e)=>{ STATE.oneToOneSessions.viewYear = Number(e.target.value); saveState(); renderOneToOneSessions(); });
   $("#oneToOneMonth")?.addEventListener("change", (e)=>{ STATE.oneToOneSessions.viewMonth = Number(e.target.value); saveState(); renderOneToOneSessions(); });
+  $("#questionReadingsYear")?.addEventListener("change", (e)=>{ STATE.questionReadings.viewYear = Number(e.target.value); saveState(); renderQuestionReadings(); });
+  $("#questionReadingsMonth")?.addEventListener("change", (e)=>{ STATE.questionReadings.viewMonth = Number(e.target.value); saveState(); renderQuestionReadings(); });
   $("#subscriptionBoards")?.addEventListener("change", async (e) => {
     const t = e.target;
     const id = t.dataset.id;
@@ -2341,6 +2452,26 @@ function wire(){
     enqueueEvent("session11_delete", { id: delBtn.dataset.id });
     saveState();
     renderOneToOneSessions();
+  });
+
+  $("#questionReadingsBoard")?.addEventListener("input", (e) => {
+    const t = e.target;
+    if(!["qrQuestionsCount", "qrCost", "qrNotes"].includes(t.dataset.act)) return;
+    const row = STATE.questionReadings.entries.find(x=>x.id===t.dataset.id);
+    if(!row) return;
+    if(t.dataset.act === "qrQuestionsCount") row.questionsCount = Number(t.value || 0) || 0;
+    if(t.dataset.act === "qrCost") row.cost = Number(t.value || 0) || 0;
+    if(t.dataset.act === "qrNotes") row.notes = t.value;
+    saveState();
+    if(t.dataset.act === "qrCost") renderQuestionReadings();
+  });
+  $("#questionReadingsBoard")?.addEventListener("click", (e) => {
+    const delBtn = e.target.closest("button[data-act='qrDelete']");
+    if(!delBtn) return;
+    STATE.questionReadings.entries = STATE.questionReadings.entries.filter(x=>x.id!==delBtn.dataset.id);
+    enqueueEvent("question_reading_delete", { id: delBtn.dataset.id });
+    saveState();
+    renderQuestionReadings();
   });
 
   $("#clientFilter").addEventListener("change", renderClients);
