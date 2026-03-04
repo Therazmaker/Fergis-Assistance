@@ -893,6 +893,7 @@ function addClient(obj){
   saveState();
   renderClients();
   renderNextSteps();
+  renderFinance();
 }
 function updateClient(id, patch){
   const c = STATE.clients.find(x => x.id === id);
@@ -903,6 +904,7 @@ function updateClient(id, patch){
   saveState();
   renderClients();
   renderNextSteps();
+  renderFinance();
 }
 function deleteClient(id){
   STATE.clients = STATE.clients.filter(x => x.id !== id);
@@ -911,6 +913,7 @@ function deleteClient(id){
   saveState();
   renderClients();
   renderNextSteps();
+  renderFinance();
 }
 
 function addNextStep(obj){
@@ -1650,16 +1653,14 @@ function renderClients(){
     const [lbl, cls] = badgeForStatus(c.status);
     const name = c.name || c.handle || "(sin nombre)";
     const handle = c.handle ? `@${c.handle.replace(/^@/,"")}` : "";
-    const next = c.nextStep ? escapeHtml(c.nextStep) : "—";
     const dob = c.dob ? escapeHtml(c.dob) : "";
     const zodiac = (c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "")) || "";
     const zPill = zodiac ? ` <span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "";
-    const bdayMeta = dob ? ` • ${dob}` : "";
     return `<div class="item">
       <div class="itemLeft">
         <div>
           <div class="itemTitle">${escapeHtml(name)} <span class="pill">${escapeHtml(handle)}</span>${zPill}</div>
-          <div class="itemMeta"><b>Próximo:</b> ${next}${bdayMeta}</div>
+          <div class="itemMeta">${dob ? `Nacimiento: ${dob}` : "Sin fecha de nacimiento registrada"}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -1767,6 +1768,20 @@ function buildFinanceEntries(){
       date: qr.date || todayKey(),
       soles: Number(qr.costSoles || qr.cost || 0) || 0,
       dolares: Number(qr.costDolares || 0) || 0
+    });
+  }
+
+  for(const c of STATE.clients){
+    const manualSoles = Number(c.paidSolesManual || 0) || 0;
+    const manualDolares = Number(c.paidDolaresManual || 0) || 0;
+    if(manualSoles <= 0 && manualDolares <= 0) continue;
+    entries.push({
+      source: "clientManual",
+      clientId: c.id || null,
+      clientName: c.name || c.handle || "",
+      date: String(c.createdAt || todayKey()).slice(0,10),
+      soles: manualSoles,
+      dolares: manualDolares
     });
   }
 
