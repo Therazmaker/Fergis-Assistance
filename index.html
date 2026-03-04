@@ -57,6 +57,7 @@
         <button class="tabBtn" data-tab="clientes">Clientes y calendario</button>
         <button class="tabBtn" data-tab="sesiones11">Sesiones 1:1</button>
         <button class="tabBtn" data-tab="suscripcion">Suscripción - Diosa en Guía</button>
+        <button class="tabBtn" data-tab="lecturasPreguntas">Lecturas por Preguntas</button>
       </section>
 
       <section class="grid tabPanel active" data-panel="plan">
@@ -246,6 +247,23 @@
             <select id="oneToOneMonth" class="input small"></select>
           </div>
           <div id="oneToOneBoards" class="subscriptionBoards"></div>
+        </section>
+      </section>
+
+      <section class="grid tabPanel" data-panel="lecturasPreguntas">
+        <section class="card fullSpan">
+          <div class="cardHead">
+            <div>
+              <div class="cardTitle">Lecturas por Preguntas</div>
+              <div class="cardSub">Registro mensual de lecturas por cantidad de preguntas.</div>
+            </div>
+            <button class="btn" id="btnAddQuestionReading">+ Lectura</button>
+          </div>
+          <div class="subscriptionFilters">
+            <select id="questionReadingsYear" class="input small"></select>
+            <select id="questionReadingsMonth" class="input small"></select>
+          </div>
+          <div id="questionReadingsBoard" class="subscriptionBoards"></div>
         </section>
       </section>
     </main>
