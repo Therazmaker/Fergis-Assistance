@@ -149,7 +149,7 @@ const CONTENT_SECTIONS = [
   ["postVideo", "🌻 Post / Video"]
 ];
 
-const APP_TABS = ["plan","contenido","investigacion","clientes","finanzas","sesiones11","suscripcion","lecturasPreguntas","archivo"];
+const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas","finanzas","archivo"];
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
   { key:"preguntas", label:"Suscripciones · Preguntas", sessions:10 }
@@ -434,6 +434,9 @@ function normalizeState_(st){
     if(!c.nextStep) c.nextStep = c.nextStep || "";
     if(!c.notes) c.notes = c.notes || "";
     if(!c.dob) c.dob = c.dob || "";           // YYYY-MM-DD
+    if(!c.birthTime) c.birthTime = c.birthTime || "";
+    if(!c.birthPlace) c.birthPlace = c.birthPlace || "";
+    if(!c.phone) c.phone = c.phone || "";
     if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
     c.paidSolesManual = Number(c.paidSolesManual || 0) || 0;
     c.paidDolaresManual = Number(c.paidDolaresManual || 0) || 0;
@@ -883,6 +886,9 @@ function addClient(obj){
     lastContactAt: obj.lastContactAt || null,
     notes: (obj.notes || "").trim(),
     dob: obj.dob || "",
+    birthTime: obj.birthTime || "",
+    birthPlace: (obj.birthPlace || "").trim(),
+    phone: (obj.phone || "").trim(),
     zodiac: obj.zodiac || "",
     paidSolesManual: Number(obj.paidSolesManual || 0) || 0,
     paidDolaresManual: Number(obj.paidDolaresManual || 0) || 0,
@@ -1724,17 +1730,6 @@ function financeDateFromEntry(entry){
 function buildFinanceEntries(){
   const entries = [];
 
-  for(const b of STATE.bookings){
-    entries.push({
-      source: "booking",
-      clientId: b.clientId || null,
-      clientName: b.client || "",
-      date: String(b.startAt || "").slice(0,10),
-      soles: Number(b.amount || 0) || 0,
-      dolares: Number(b.amountUsd || 0) || 0
-    });
-  }
-
   for(const sub of STATE.subscriptions.entries){
     const c = findClientByBookingClientString(sub.name || "");
     entries.push({
@@ -1768,20 +1763,6 @@ function buildFinanceEntries(){
       date: qr.date || todayKey(),
       soles: Number(qr.costSoles || qr.cost || 0) || 0,
       dolares: Number(qr.costDolares || 0) || 0
-    });
-  }
-
-  for(const c of STATE.clients){
-    const manualSoles = Number(c.paidSolesManual || 0) || 0;
-    const manualDolares = Number(c.paidDolaresManual || 0) || 0;
-    if(manualSoles <= 0 && manualDolares <= 0) continue;
-    entries.push({
-      source: "clientManual",
-      clientId: c.id || null,
-      clientName: c.name || c.handle || "",
-      date: String(c.createdAt || todayKey()).slice(0,10),
-      soles: manualSoles,
-      dolares: manualDolares
     });
   }
 
@@ -3071,6 +3052,18 @@ function openClientModal(clientId=null){
         <div class="itemMeta">Si lo pones, puedo calcular el signo automáticamente (o lo eliges tú).</div>
       </div>
       <div class="row">
+        <label class="label">Hora de nacimiento</label>
+        <input id="mCBirthTime" type="time" class="input" value="${escapeHtml(c?.birthTime||"")}" />
+      </div>
+      <div class="row">
+        <label class="label">Lugar de nacimiento</label>
+        <input id="mCBirthPlace" class="input" value="${escapeHtml(c?.birthPlace||"")}" placeholder="Ej: Lima, Perú" />
+      </div>
+      <div class="row">
+        <label class="label">Teléfono</label>
+        <input id="mCPhone" class="input" value="${escapeHtml(c?.phone||"")}" placeholder="Ej: +51 999 999 999" />
+      </div>
+      <div class="row">
         <label class="label">Signo</label>
         <select id="mCZodiac" class="input">
           <option value="">(sin definir)</option>
@@ -3118,6 +3111,9 @@ function openClientModal(clientId=null){
       status: $("#mCStatus").value,
       notes: $("#mCNotes").value,
       dob: $("#mCDob").value,
+      birthTime: $("#mCBirthTime").value,
+      birthPlace: $("#mCBirthPlace").value,
+      phone: $("#mCPhone").value,
       zodiac: $("#mCZodiac").value,
       paidSolesManual: Number($("#mCPaidSolesManual")?.value || 0) || 0,
       paidDolaresManual: Number($("#mCPaidDolaresManual")?.value || 0) || 0
