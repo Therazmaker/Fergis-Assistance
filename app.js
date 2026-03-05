@@ -1220,6 +1220,7 @@ function addSubscription(obj={}){
   enqueueEvent("subscription_add", entry);
   saveState();
   renderSubscriptions();
+  renderFinance();
 }
 
 function openSubscriptionModal(){
@@ -1339,6 +1340,7 @@ function addOneToOneSession(obj={}){
   enqueueEvent("session11_add", entry);
   saveState();
   renderOneToOneSessions();
+  renderFinance();
 }
 
 function openOneToOneSessionModal(){
@@ -1461,6 +1463,7 @@ function addQuestionReading(obj={}){
   enqueueEvent("question_reading_add", entry);
   saveState();
   renderQuestionReadings();
+  renderFinance();
 }
 
 function openQuestionReadingModal(){
@@ -2273,6 +2276,7 @@ function wire(){
     STATE.activeTab = btn.dataset.tab;
     saveState();
     renderTabs();
+    if(STATE.activeTab === "finanzas") renderFinance();
   });
 
   $("#btnAddContentItem").addEventListener("click", () => {
@@ -2807,6 +2811,7 @@ function wire(){
       enqueueEvent("subscription_invoice", { id, invoiceImageName: row.invoiceImageName });
       saveState();
       renderSubscriptions();
+      renderFinance();
     }
   });
   $("#subscriptionBoards")?.addEventListener("input", (e) => {
@@ -2836,6 +2841,7 @@ function wire(){
     enqueueEvent("subscription_delete", { id: btn.dataset.id });
     saveState();
     renderSubscriptions();
+    renderFinance();
   });
 
   $("#oneToOneBoards")?.addEventListener("change", async (e) => {
@@ -2889,6 +2895,7 @@ function wire(){
     enqueueEvent("session11_delete", { id: delBtn.dataset.id });
     saveState();
     renderOneToOneSessions();
+    renderFinance();
   });
 
   $("#questionReadingsBoard")?.addEventListener("change", async (e) => {
@@ -2920,13 +2927,16 @@ function wire(){
     if(!row) return;
     if(t.dataset.act === "qrQuestionsCount") row.questionsCount = Number(t.value || 0) || 0;
     if(t.dataset.act === "qrCostSoles"){
-      row.costSoles = Number(t.value || 0) || 0;
+      row.costSoles = amountNum(t.value);
       row.cost = row.costSoles;
     }
-    if(t.dataset.act === "qrCostDolares") row.costDolares = Number(t.value || 0) || 0;
+    if(t.dataset.act === "qrCostDolares") row.costDolares = amountNum(t.value);
     if(t.dataset.act === "qrNotes") row.notes = t.value;
     saveState();
-    if(["qrCostSoles", "qrCostDolares"].includes(t.dataset.act)) renderQuestionReadings();
+    if(["qrCostSoles", "qrCostDolares"].includes(t.dataset.act)){
+      renderQuestionReadings();
+      renderFinance();
+    }
   });
   $("#questionReadingsBoard")?.addEventListener("click", (e) => {
     const viewBtn = e.target.closest("button[data-act='qrViewInvoice']");
@@ -2947,6 +2957,7 @@ function wire(){
     enqueueEvent("question_reading_delete", { id: delBtn.dataset.id });
     saveState();
     renderQuestionReadings();
+    renderFinance();
   });
 
   $("#clientFilter").addEventListener("change", renderClients);
