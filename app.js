@@ -35,6 +35,32 @@ function normHandle(h){
   return (h||"").trim().replace(/^@/,"").toLowerCase();
 }
 
+function amountNum(v){
+  if(v == null) return 0;
+  if(typeof v === "number") return Number.isFinite(v) ? v : 0;
+  const raw = String(v).trim();
+  if(!raw) return 0;
+  const clean = raw.replace(/\s/g, "").replace(/[^\d,.-]/g, "");
+  if(!clean) return 0;
+
+  const hasComma = clean.includes(",");
+  const hasDot = clean.includes(".");
+  let normalized = clean;
+
+  if(hasComma && hasDot){
+    if(clean.lastIndexOf(",") > clean.lastIndexOf(".")){
+      normalized = clean.replace(/\./g, "").replace(",", ".");
+    }else{
+      normalized = clean.replace(/,/g, "");
+    }
+  }else if(hasComma){
+    normalized = clean.replace(",", ".");
+  }
+
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function zodiacFromDob(dob){
   // dob: "YYYY-MM-DD"
   try{
@@ -375,8 +401,8 @@ function normalizeState_(st){
     sub.type = sub.type || "oneToOne";
     sub.paymentDate = sub.paymentDate || todayKey();
     sub.name = (sub.name || "").trim();
-    sub.costSoles = Number(sub.costSoles || 0) || 0;
-    sub.costDolares = Number(sub.costDolares || 0) || 0;
+    sub.costSoles = amountNum(sub.costSoles);
+    sub.costDolares = amountNum(sub.costDolares);
     sub.sessionsDone = Array.isArray(sub.sessionsDone) ? sub.sessionsDone : [];
     sub.observations = sub.observations || "";
     sub.invoiceImage = sub.invoiceImage || "";
@@ -395,8 +421,8 @@ function normalizeState_(st){
     sess.birthDate = sess.birthDate || "";
     sess.sessionType = (sess.sessionType || "").trim();
     sess.modality = (sess.modality || "").trim();
-    sess.costSoles = Number(sess.costSoles || 0) || 0;
-    sess.costDolares = Number(sess.costDolares || 0) || 0;
+    sess.costSoles = amountNum(sess.costSoles);
+    sess.costDolares = amountNum(sess.costDolares);
     sess.invoiceImage = sess.invoiceImage || "";
     sess.invoiceImageName = sess.invoiceImageName || "";
   }
@@ -411,9 +437,9 @@ function normalizeState_(st){
     reading.consultant = (reading.consultant || "").trim();
     reading.birthDate = reading.birthDate || "";
     reading.questionsCount = Number(reading.questionsCount || 0) || 0;
-    const legacyCost = Number(reading.cost || 0) || 0;
-    reading.costSoles = Number(reading.costSoles ?? legacyCost) || 0;
-    reading.costDolares = Number(reading.costDolares || 0) || 0;
+    const legacyCost = amountNum(reading.cost);
+    reading.costSoles = amountNum(reading.costSoles ?? legacyCost);
+    reading.costDolares = amountNum(reading.costDolares);
     reading.cost = reading.costSoles;
     reading.notes = reading.notes || "";
     reading.invoiceImage = reading.invoiceImage || "";
@@ -438,8 +464,8 @@ function normalizeState_(st){
     if(!c.birthPlace) c.birthPlace = c.birthPlace || "";
     if(!c.phone) c.phone = c.phone || "";
     if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
-    c.paidSolesManual = Number(c.paidSolesManual || 0) || 0;
-    c.paidDolaresManual = Number(c.paidDolaresManual || 0) || 0;
+    c.paidSolesManual = amountNum(c.paidSolesManual);
+    c.paidDolaresManual = amountNum(c.paidDolaresManual);
   }
 
 
@@ -890,8 +916,8 @@ function addClient(obj){
     birthPlace: (obj.birthPlace || "").trim(),
     phone: (obj.phone || "").trim(),
     zodiac: obj.zodiac || "",
-    paidSolesManual: Number(obj.paidSolesManual || 0) || 0,
-    paidDolaresManual: Number(obj.paidDolaresManual || 0) || 0,
+    paidSolesManual: amountNum(obj.paidSolesManual),
+    paidDolaresManual: amountNum(obj.paidDolaresManual),
     createdAt: nowISO()
   };
   STATE.clients.unshift(c);
@@ -1182,8 +1208,8 @@ function addSubscription(obj={}){
     type: obj.type || "oneToOne",
     paymentDate: obj.paymentDate || todayKey(),
     name: (obj.name || "").trim(),
-    costSoles: Number(obj.costSoles || 0) || 0,
-    costDolares: Number(obj.costDolares || 0) || 0,
+    costSoles: amountNum(obj.costSoles),
+    costDolares: amountNum(obj.costDolares),
     sessionsDone: [],
     observations: (obj.observations || "").trim(),
     invoiceImage: obj.invoiceImage || "",
@@ -1194,6 +1220,7 @@ function addSubscription(obj={}){
   enqueueEvent("subscription_add", entry);
   saveState();
   renderSubscriptions();
+  renderFinance();
 }
 
 function openSubscriptionModal(){
@@ -1303,8 +1330,8 @@ function addOneToOneSession(obj={}){
     birthDate: obj.birthDate || "",
     sessionType: (obj.sessionType || "").trim(),
     modality: (obj.modality || "").trim(),
-    costSoles: Number(obj.costSoles || 0) || 0,
-    costDolares: Number(obj.costDolares || 0) || 0,
+    costSoles: amountNum(obj.costSoles),
+    costDolares: amountNum(obj.costDolares),
     invoiceImage: obj.invoiceImage || "",
     invoiceImageName: obj.invoiceImageName || "",
     createdAt: nowISO()
@@ -1313,6 +1340,7 @@ function addOneToOneSession(obj={}){
   enqueueEvent("session11_add", entry);
   saveState();
   renderOneToOneSessions();
+  renderFinance();
 }
 
 function openOneToOneSessionModal(){
@@ -1423,8 +1451,8 @@ function addQuestionReading(obj={}){
     consultant: (obj.consultant || "").trim(),
     birthDate: obj.birthDate || "",
     questionsCount: Number(obj.questionsCount || 0) || 0,
-    costSoles: Number(obj.costSoles || 0) || 0,
-    costDolares: Number(obj.costDolares || 0) || 0,
+    costSoles: amountNum(obj.costSoles),
+    costDolares: amountNum(obj.costDolares),
     notes: obj.notes || "",
     invoiceImage: obj.invoiceImage || "",
     invoiceImageName: obj.invoiceImageName || "",
@@ -1435,6 +1463,7 @@ function addQuestionReading(obj={}){
   enqueueEvent("question_reading_add", entry);
   saveState();
   renderQuestionReadings();
+  renderFinance();
 }
 
 function openQuestionReadingModal(){
@@ -1737,8 +1766,8 @@ function buildFinanceEntries(){
       clientId: c?.id || null,
       clientName: sub.name || "",
       date: sub.paymentDate || todayKey(),
-      soles: Number(sub.costSoles || 0) || 0,
-      dolares: Number(sub.costDolares || 0) || 0
+      soles: amountNum(sub.costSoles),
+      dolares: amountNum(sub.costDolares)
     });
   }
 
@@ -1749,8 +1778,8 @@ function buildFinanceEntries(){
       clientId: c?.id || null,
       clientName: sess.consultant || sess.contact || "",
       date: sess.date || todayKey(),
-      soles: Number(sess.costSoles || 0) || 0,
-      dolares: Number(sess.costDolares || 0) || 0
+      soles: amountNum(sess.costSoles),
+      dolares: amountNum(sess.costDolares)
     });
   }
 
@@ -1761,8 +1790,8 @@ function buildFinanceEntries(){
       clientId: c?.id || null,
       clientName: qr.consultant || "",
       date: qr.date || todayKey(),
-      soles: Number(qr.costSoles || qr.cost || 0) || 0,
-      dolares: Number(qr.costDolares || 0) || 0
+      soles: amountNum(qr.costSoles ?? qr.cost),
+      dolares: amountNum(qr.costDolares)
     });
   }
 
@@ -2247,6 +2276,7 @@ function wire(){
     STATE.activeTab = btn.dataset.tab;
     saveState();
     renderTabs();
+    if(STATE.activeTab === "finanzas") renderFinance();
   });
 
   $("#btnAddContentItem").addEventListener("click", () => {
@@ -2781,6 +2811,7 @@ function wire(){
       enqueueEvent("subscription_invoice", { id, invoiceImageName: row.invoiceImageName });
       saveState();
       renderSubscriptions();
+      renderFinance();
     }
   });
   $("#subscriptionBoards")?.addEventListener("input", (e) => {
@@ -2810,6 +2841,7 @@ function wire(){
     enqueueEvent("subscription_delete", { id: btn.dataset.id });
     saveState();
     renderSubscriptions();
+    renderFinance();
   });
 
   $("#oneToOneBoards")?.addEventListener("change", async (e) => {
@@ -2863,6 +2895,7 @@ function wire(){
     enqueueEvent("session11_delete", { id: delBtn.dataset.id });
     saveState();
     renderOneToOneSessions();
+    renderFinance();
   });
 
   $("#questionReadingsBoard")?.addEventListener("change", async (e) => {
@@ -2894,13 +2927,16 @@ function wire(){
     if(!row) return;
     if(t.dataset.act === "qrQuestionsCount") row.questionsCount = Number(t.value || 0) || 0;
     if(t.dataset.act === "qrCostSoles"){
-      row.costSoles = Number(t.value || 0) || 0;
+      row.costSoles = amountNum(t.value);
       row.cost = row.costSoles;
     }
-    if(t.dataset.act === "qrCostDolares") row.costDolares = Number(t.value || 0) || 0;
+    if(t.dataset.act === "qrCostDolares") row.costDolares = amountNum(t.value);
     if(t.dataset.act === "qrNotes") row.notes = t.value;
     saveState();
-    if(["qrCostSoles", "qrCostDolares"].includes(t.dataset.act)) renderQuestionReadings();
+    if(["qrCostSoles", "qrCostDolares"].includes(t.dataset.act)){
+      renderQuestionReadings();
+      renderFinance();
+    }
   });
   $("#questionReadingsBoard")?.addEventListener("click", (e) => {
     const viewBtn = e.target.closest("button[data-act='qrViewInvoice']");
@@ -2921,6 +2957,7 @@ function wire(){
     enqueueEvent("question_reading_delete", { id: delBtn.dataset.id });
     saveState();
     renderQuestionReadings();
+    renderFinance();
   });
 
   $("#clientFilter").addEventListener("change", renderClients);
@@ -3052,6 +3089,14 @@ function openClientModal(clientId=null){
         <div class="itemMeta">Si lo pones, puedo calcular el signo automáticamente (o lo eliges tú).</div>
       </div>
       <div class="row">
+        <label class="label">Signo</label>
+        <select id="mCZodiac" class="input">
+          <option value="">(sin definir)</option>
+          ${ZODIAC_SIGNS.map(z => `<option value="${z}" ${(c?.zodiac===z)?"selected":""}>${z}</option>`).join("")}
+        </select>
+        <div class="itemMeta">Tip: si lo dejas vacío pero hay fecha, al guardar se autocompleta.</div>
+      </div>
+      <div class="row">
         <label class="label">Hora de nacimiento</label>
         <input id="mCBirthTime" type="time" class="input" value="${escapeHtml(c?.birthTime||"")}" />
       </div>
@@ -3062,14 +3107,6 @@ function openClientModal(clientId=null){
       <div class="row">
         <label class="label">Teléfono</label>
         <input id="mCPhone" class="input" value="${escapeHtml(c?.phone||"")}" placeholder="Ej: +51 999 999 999" />
-      </div>
-      <div class="row">
-        <label class="label">Signo</label>
-        <select id="mCZodiac" class="input">
-          <option value="">(sin definir)</option>
-          ${ZODIAC_SIGNS.map(z => `<option value="${z}" ${(c?.zodiac===z)?"selected":""}>${z}</option>`).join("")}
-        </select>
-        <div class="itemMeta">Tip: si lo dejas vacío pero hay fecha, al guardar se autocompleta.</div>
       </div>
 
       <div class="financeMiniCard">
@@ -3115,8 +3152,8 @@ function openClientModal(clientId=null){
       birthPlace: $("#mCBirthPlace").value,
       phone: $("#mCPhone").value,
       zodiac: $("#mCZodiac").value,
-      paidSolesManual: Number($("#mCPaidSolesManual")?.value || 0) || 0,
-      paidDolaresManual: Number($("#mCPaidDolaresManual")?.value || 0) || 0
+      paidSolesManual: amountNum($("#mCPaidSolesManual")?.value),
+      paidDolaresManual: amountNum($("#mCPaidDolaresManual")?.value)
     };
     if(obj.dob && !obj.zodiac) obj.zodiac = zodiacFromDob(obj.dob);
 
