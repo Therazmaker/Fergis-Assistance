@@ -1753,7 +1753,10 @@ function renderNextSteps(){
 }
 
 function financeDateFromEntry(entry){
-  return entry.date || entry.paymentDate || entry.startAt || todayKey();
+  const raw = entry.date || entry.paymentDate || entry.startAt || todayKey();
+  if(typeof raw !== "string") return todayKey();
+  const match = raw.match(/^\d{4}-\d{2}-\d{2}/);
+  return match ? match[0] : todayKey();
 }
 
 function buildFinanceEntries(){
@@ -1792,6 +1795,19 @@ function buildFinanceEntries(){
       date: qr.date || todayKey(),
       soles: amountNum(qr.costSoles ?? qr.cost),
       dolares: amountNum(qr.costDolares)
+    });
+  }
+
+  for(const booking of STATE.bookings){
+    if(booking.status === "cancelled") continue;
+    const c = booking.clientId ? STATE.clients.find(x => String(x.id) === String(booking.clientId)) : findClientByBookingClientString(booking.client || "");
+    entries.push({
+      source: "booking",
+      clientId: c?.id || booking.clientId || null,
+      clientName: c?.name || c?.handle || booking.client || "",
+      date: booking.startAt || todayKey(),
+      soles: amountNum(booking.amount),
+      dolares: amountNum(booking.amountUsd)
     });
   }
 
