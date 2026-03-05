@@ -569,6 +569,7 @@ function addBooking(obj){
   renderCalendar();
   renderBookings();
   renderArchiveBookings();
+  renderFinance();
 }
 
 function updateBooking(id, patch){
@@ -580,6 +581,7 @@ function updateBooking(id, patch){
   renderCalendar();
   renderBookings();
   renderArchiveBookings();
+  renderFinance();
 }
 
 function deleteBooking(id){
@@ -589,6 +591,7 @@ function deleteBooking(id){
   renderCalendar();
   renderBookings();
   renderArchiveBookings();
+  renderFinance();
 }
 
 // ---------- Reminders ----------
@@ -1830,11 +1833,9 @@ function renderFinance(){
 
   const months = { "1M": 1, "3M": 3, "6M": 6, "1Y": 12 };
   const monthsBack = months[STATE.financeRange] || 1;
-  const end = new Date();
-  end.setHours(23,59,59,999);
-  const start = new Date(end);
-  start.setMonth(start.getMonth() - monthsBack);
-  start.setHours(0,0,0,0);
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - (monthsBack - 1), 1, 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
   const rows = buildFinanceEntries().filter((x) => {
     const d = new Date(`${financeDateFromEntry(x)}T00:00:00`);
