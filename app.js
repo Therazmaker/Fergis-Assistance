@@ -1173,8 +1173,8 @@ function renderSubscriptions(){
       </tr>`;
     }).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
 
-    const totalS = byType.reduce((a,x)=>a+Number(x.costSoles||0),0);
-    const totalD = byType.reduce((a,x)=>a+Number(x.costDolares||0),0);
+    const totalS = byType.reduce((a,x)=>a + amountNum(x.costSoles), 0);
+    const totalD = byType.reduce((a,x)=>a + amountNum(x.costDolares), 0);
     const headers = cols.map(n=>`<th>${type.key === "preguntas" ? "Pregunta" : "Sesión"} ${n}</th>`).join("");
     return `<div class="subBoard">
       <h4>${escapeHtml(type.label)}</h4>
@@ -1302,8 +1302,8 @@ function renderOneToOneSessions(){
       <td><button class="btn ghost" data-act="s11Delete" data-id="${e.id}">🗑</button></td>
     </tr>`).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
 
-  const totalS = rows.reduce((a,x)=>a+Number(x.costSoles||0),0);
-  const totalD = rows.reduce((a,x)=>a+Number(x.costDolares||0),0);
+  const totalS = rows.reduce((a,x)=>a + amountNum(x.costSoles), 0);
+  const totalD = rows.reduce((a,x)=>a + amountNum(x.costDolares), 0);
 
   boards.innerHTML = `<div class="subBoard">
     <h4>Sesiones 1:1</h4>
@@ -1425,8 +1425,8 @@ function renderQuestionReadings(){
       <td><button class="btn ghost" data-act="qrDelete" data-id="${e.id}">🗑</button></td>
     </tr>`).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
 
-  const totalSoles = rows.reduce((a,x)=>a+Number(x.costSoles || x.cost || 0),0);
-  const totalDolares = rows.reduce((a,x)=>a+Number(x.costDolares||0),0);
+  const totalSoles = rows.reduce((a,x)=>a + amountNum(x.costSoles ?? x.cost), 0);
+  const totalDolares = rows.reduce((a,x)=>a + amountNum(x.costDolares), 0);
 
   board.innerHTML = `<div class="subBoard">
     <h4>Lecturas por preguntas</h4>
@@ -3112,8 +3112,8 @@ function openClientModal(clientId=null){
       <div class="financeMiniCard">
         ${(() => {
           const totals = c ? totalsByClient(c.id) : { soles: 0, dolares: 0 };
-          const manualS = Number(c?.paidSolesManual || 0) || 0;
-          const manualD = Number(c?.paidDolaresManual || 0) || 0;
+          const manualS = amountNum(c?.paidSolesManual);
+          const manualD = amountNum(c?.paidDolaresManual);
           return `<div class="itemTitle">Pagado por cliente</div>
             <div class="itemMeta">Automático: <b>S/ ${(totals.soles).toFixed(2)}</b> • <b>US$ ${(totals.dolares).toFixed(2)}</b></div>
             <div class="itemMeta">Manual extra: S/ ${manualS.toFixed(2)} • US$ ${manualD.toFixed(2)}</div>`;
