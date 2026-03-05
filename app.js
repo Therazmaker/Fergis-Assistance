@@ -2088,26 +2088,30 @@ function renderBookings(){
     const amount = b.amount ? ` • S/ ${b.amount}` : "";
     const amountUsd = b.amountUsd ? ` • $ ${b.amountUsd}` : "";
     const info = getClientForBooking_(b);
-    const client = info.display ? ` • ${escapeHtml(info.display)}` : (b.client ? ` • ${escapeHtml(b.client)}` : "");
-    const zpill = info.zodiac ? ` <span class="pill mini">${escapeHtml(info.zodiac)}</span>` : "";
+    const clientMain = escapeHtml(info.display || b.client || "(sin cliente)");
     const statusBadge = b.status === "done" ? ["Hecha","ok"] : (b.status === "cancelled" ? ["Cancelada","warn"] : ["Programada","neutral"]);
-    const title = b.title ? escapeHtml(b.title) : lbl;
+    const title = escapeHtml(b.title || lbl);
     const rep = b.recurrence?.freq ? " • semanal" : "";
     return `<div class="item">
       <div class="itemLeft">
-        <div>
-          <div class="itemTitle">${title}${zpill}</div>
-          <div class="itemMeta">${when}${client}${amount}${amountUsd}${rep}</div>
+        <div class="bookingMain">
+          <div class="itemTitle">${clientMain}</div>
+          <div class="itemMeta bookingWhen">${when}</div>
+          <div class="itemMeta bookingSub">${title}${amount}${amountUsd}${rep}</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center">
-        <span class="badge ${cls}">${lbl}</span>
-        <span class="badge ${statusBadge[1]}">${statusBadge[0]}</span>
+      <div class="bookingRight">
+        <div class="bookingTags">
+          <span class="badge tiny ${cls}">${lbl}</span>
+          <span class="badge tiny ${statusBadge[1]}">${statusBadge[0]}</span>
+        </div>
+        <div class="bookingActions">
         <button class="btn" data-act="bookDone" data-id="${b.id}" title="Marcar como hecha">Hecho</button>
         ${(b.sessionRecords||[]).some(r=>r.occStartAt===o.startAt) ? `<span class="pill">log</span>` : ``}
         <button class="btn ghost" data-act="bookSession" data-id="${b.id}" data-occ="${escapeHtml(o.startAt)}" title="Abrir sesión">📝</button>
         <button class="btn ghost" data-act="bookEdit" data-id="${b.id}" title="Editar">✎</button>
         <button class="btn ghost" data-act="bookDel" data-id="${b.id}" title="Eliminar">🗑</button>
+        </div>
       </div>
     </div>`;
   }).join("");
