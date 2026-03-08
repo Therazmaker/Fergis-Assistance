@@ -24,7 +24,10 @@ let CONTENT_DRAG = null;
 let IDB_PROMISE = null;
 
 const nowISO = () => new Date().toISOString();
-const todayKey = () => new Date().toISOString().slice(0,10);
+const todayKey = ()=>{
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+};
 
 // ---- Zodiac helpers ----
 const ZODIAC_SIGNS = [
@@ -139,6 +142,19 @@ function dateKey(d){
   return `${yyyy}-${mm}-${dd}`;
 }
 
+function formatDateDMY(ymd){
+  if(!ymd) return "";
+  const [y,m,d] = String(ymd).split("-");
+  if(!y || !m || !d) return "";
+  return `${pad2(Number(d))}-${pad2(Number(m))}-${y}`;
+}
+
+function formatDateTimeDMYHM(isoLike){
+  const d = new Date(isoLike);
+  if(Number.isNaN(d.getTime())) return "";
+  return `${pad2(d.getDate())}-${pad2(d.getMonth()+1)}-${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+
 // ---- Month helpers ----
 function monthKey(d=new Date()){
   const x = new Date(d);
@@ -185,9 +201,7 @@ const MONTHS_ES = ["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Ago
 function getTodayKey(){ return todayKey(); }
 
 function formatContentDateLabel(dayKey){
-  const d = new Date(`${dayKey}T00:00:00`);
-  const pretty = d.toLocaleDateString("es-AR", { weekday:"short", day:"2-digit", month:"short" });
-  const base = pretty.charAt(0).toUpperCase() + pretty.slice(1).replace(/\./g, "");
+  const base = formatDateDMY(dayKey) || dayKey;
   return dayKey === getTodayKey() ? `Hoy · ${base}` : base;
 }
 
@@ -3390,19 +3404,22 @@ function openClientSessionModal(bookingId, occStartAt=null){
 
   const occIso = occStartAt || b.startAt;
   const dt = new Date(occIso);
-  const whenFull = dt.toLocaleString(undefined, { weekday:"long", year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+  const whenFull = formatDateTimeDMYHM(occIso) || dt.toLocaleString(undefined, { weekday:"long", year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
 
   const clientStr = b.client || "";
   const info = getClientForBooking_(b);
   const c = info.client;
+  const recs = Array.isArray(b.sessionRecords) ? b.sessionRecords : [];
+  const recFromLog = recs.find(r => r.occStartAt === occIso) || null;
+  const snap = recFromLog?.clientSnapshot || {};
 
-  const zodiac = info.zodiac;
-  const dob = c?.dob || "";
-  const birthTime = c?.birthTime || "";
-  const birthPlace = c?.birthPlace || "";
-  const phone = c?.phone || "";
-  const displayName = info.display || (clientStr || "(sin cliente)");
-  const handleShow = info.handleShow || (clientStr||"");
+  const zodiac = info.zodiac || snap.zodiac || "";
+  const dob = formatDateDMY(c?.dob || snap.dob || "");
+  const birthTime = c?.birthTime || snap.birthTime || "";
+  const birthPlace = c?.birthPlace || snap.birthPlace || "";
+  const phone = c?.phone || snap.phone || "";
+  const displayName = info.display || snap.name || (clientStr || "(sin cliente)");
+  const handleShow = info.handleShow || snap.handle || (clientStr||"");
   const headerPills = [
     zodiac ? `<span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "",
     dob ? `<span class="pill">🎂 ${escapeHtml(dob)}</span>` : "",
@@ -3412,10 +3429,9 @@ function openClientSessionModal(bookingId, occStartAt=null){
     handleShow ? `<span class="pill">${escapeHtml(handleShow)}</span>` : ""
   ].filter(Boolean).join(" ");
 
-  const recs = Array.isArray(b.sessionRecords) ? b.sessionRecords : [];
-  let rec = recs.find(r => r.occStartAt === occIso) || null;
+  let rec = recFromLog;
   if(!rec){
-    rec = { id: uid("srec"), bookingId: b.id, occStartAt: occIso, createdAt: nowISO(), sessionNotes:"", recommendations:"", clientSnapshot: c ? { id:c.id, name:c.name, handle:c.handle, dob:c.dob, zodiac:c.zodiac } : { raw: clientStr } };
+    rec = { id: uid("srec"), bookingId: b.id, occStartAt: occIso, createdAt: nowISO(), sessionNotes:"", recommendations:"", clientSnapshot: c ? { id:c.id, name:c.name, handle:c.handle, dob:c.dob, zodiac:c.zodiac, birthTime:c.birthTime, birthPlace:c.birthPlace, phone:c.phone } : { raw: clientStr } };
   }
 
   const statusBadge = b.status === "done" ? ["Hecha","ok"] : (b.status === "cancelled" ? ["Cancelada","warn"] : ["Programada","neutral"]);
