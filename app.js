@@ -1672,7 +1672,7 @@ function renderClients(){
 
   let items = [...STATE.clients];
   if(filter !== "all") items = items.filter(c => c.status === filter);
-  if(q) items = items.filter(c => (c.name+" "+c.handle+" "+c.nextStep).toLowerCase().includes(q));
+  if(q) items = items.filter(c => (c.name+" "+c.handle+" "+c.phone+" "+c.nextStep).toLowerCase().includes(q));
 
   if(!items.length){
     list.innerHTML = `<div class="item">
@@ -1688,21 +1688,20 @@ function renderClients(){
   }
 
   list.innerHTML = items.slice(0,20).map(c => {
-    const [lbl, cls] = badgeForStatus(c.status);
     const name = c.name || c.handle || "(sin nombre)";
-    const handle = c.handle ? `@${c.handle.replace(/^@/,"")}` : "";
+    const phone = (c.phone || "").trim();
+    const phoneLabel = phone || "Sin teléfono";
     const dob = c.dob ? escapeHtml(c.dob) : "";
     const zodiac = (c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "")) || "";
     const zPill = zodiac ? ` <span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "";
     return `<div class="item">
       <div class="itemLeft">
         <div>
-          <div class="itemTitle">${escapeHtml(name)} <span class="pill">${escapeHtml(handle)}</span>${zPill}</div>
+          <div class="itemTitle">${escapeHtml(name)} <span class="pill">${escapeHtml(phoneLabel)}</span>${zPill}</div>
           <div class="itemMeta">${dob ? `Nacimiento: ${dob}` : "Sin fecha de nacimiento registrada"}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
-        <span class="badge ${cls}">${lbl}</span>
         <button class="btn ghost" data-act="clientEdit" data-id="${c.id}" title="Editar">✎</button>
         <button class="btn ghost" data-act="clientDel" data-id="${c.id}" title="Eliminar">🗑</button>
       </div>
@@ -3399,11 +3398,17 @@ function openClientSessionModal(bookingId, occStartAt=null){
 
   const zodiac = info.zodiac;
   const dob = c?.dob || "";
+  const birthTime = c?.birthTime || "";
+  const birthPlace = c?.birthPlace || "";
+  const phone = c?.phone || "";
   const displayName = info.display || (clientStr || "(sin cliente)");
   const handleShow = info.handleShow || (clientStr||"");
   const headerPills = [
     zodiac ? `<span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "",
     dob ? `<span class="pill">🎂 ${escapeHtml(dob)}</span>` : "",
+    birthTime ? `<span class="pill">🕒 ${escapeHtml(birthTime)}</span>` : "",
+    birthPlace ? `<span class="pill">📍 ${escapeHtml(birthPlace)}</span>` : "",
+    phone ? `<span class="pill">📞 ${escapeHtml(phone)}</span>` : "",
     handleShow ? `<span class="pill">${escapeHtml(handleShow)}</span>` : ""
   ].filter(Boolean).join(" ");
 
@@ -3483,6 +3488,9 @@ function openClientSessionModal(bookingId, occStartAt=null){
         `Fecha: ${whenFull}`,
         zodiac ? `Signo: ${zodiac}` : "",
         dob ? `Nacimiento: ${dob}` : "",
+        birthTime ? `Hora de nacimiento: ${birthTime}` : "",
+        birthPlace ? `Lugar de nacimiento: ${birthPlace}` : "",
+        phone ? `Teléfono: ${phone}` : "",
         `Tipo: ${lbl}`,
         `Notas: ${($("#mSessNotes").value||"").trim()}`,
         `Recomendaciones: ${($("#mSessRecs").value||"").trim()}`
