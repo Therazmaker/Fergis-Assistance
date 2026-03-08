@@ -1576,7 +1576,10 @@ function renderMetrics(){
   $("#mActiveToday").textContent = totalSec ? formatMin(totalSec) : "0m";
   $("#mSessionsToday").textContent = String(sessionsToday.length);
 
-  const contentDay = ensureContentDay(STATE.contentTodo.activeDate || day);
+  if(STATE.contentTodo.activeDate !== day){
+    STATE.contentTodo.activeDate = day;
+  }
+  const contentDay = ensureContentDay(day);
   const contentPending = CONTENT_SECTIONS
     .flatMap(([k]) => contentDay.sections[k] || [])
     .filter(x => !x.done).length;
@@ -1586,7 +1589,11 @@ function renderMetrics(){
 
 function renderContentTodo(){
   archiveContentIfDayChanged();
-  const dayKey = STATE.contentTodo.activeDate || getTodayKey();
+  const dayKey = getTodayKey();
+  if(STATE.contentTodo.activeDate !== dayKey){
+    STATE.contentTodo.activeDate = dayKey;
+    saveState();
+  }
   const day = ensureContentDay(dayKey);
   const list = $("#contentTodoList");
   if(!list) return;
@@ -3405,6 +3412,8 @@ function openClientSessionModal(bookingId, occStartAt=null){
   const occIso = occStartAt || b.startAt;
   const dt = new Date(occIso);
   const whenFull = formatDateTimeDMYHM(occIso) || dt.toLocaleString(undefined, { weekday:"long", year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
+  const sessionDate = formatDateDMY(occIso) || dt.toLocaleDateString();
+  const sessionTime = dt.toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
 
   const clientStr = b.client || "";
   const info = getClientForBooking_(b);
@@ -3421,6 +3430,8 @@ function openClientSessionModal(bookingId, occStartAt=null){
   const displayName = info.display || snap.name || (clientStr || "(sin cliente)");
   const handleShow = info.handleShow || snap.handle || (clientStr||"");
   const headerPills = [
+    sessionDate ? `<span class="pill">📅 ${escapeHtml(sessionDate)}</span>` : "",
+    sessionTime ? `<span class="pill">🕒 ${escapeHtml(sessionTime)}</span>` : "",
     zodiac ? `<span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "",
     dob ? `<span class="pill">🎂 ${escapeHtml(dob)}</span>` : "",
     birthTime ? `<span class="pill">🕒 ${escapeHtml(birthTime)}</span>` : "",
@@ -3444,7 +3455,6 @@ function openClientSessionModal(bookingId, occStartAt=null){
         <div class="sessTitle">
           <div class="sessName">${escapeHtml(displayName)}</div>
           <div class="sessPills">${headerPills || ""}</div>
-          <div class="sessWhen">${escapeHtml(whenFull)}</div>
         </div>
         <div class="sessBadges">
           <span class="badge ${cls}">${lbl}</span>
