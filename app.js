@@ -1589,10 +1589,8 @@ function renderMetrics(){
   $("#mActiveToday").textContent = totalSec ? formatMin(totalSec) : "0m";
   $("#mSessionsToday").textContent = String(sessionsToday.length);
 
-  if(STATE.contentTodo.activeDate !== day){
-    STATE.contentTodo.activeDate = day;
-  }
-  const contentDay = ensureContentDay(day);
+  const activeContentDayKey = STATE.contentTodo.activeDate || day;
+  const contentDay = ensureContentDay(activeContentDayKey);
   const contentPending = CONTENT_SECTIONS
     .flatMap(([k]) => contentDay.sections[k] || [])
     .filter(x => !x.done).length;
@@ -1602,11 +1600,7 @@ function renderMetrics(){
 
 function renderContentTodo(){
   archiveContentIfDayChanged();
-  const dayKey = getTodayKey();
-  if(STATE.contentTodo.activeDate !== dayKey){
-    STATE.contentTodo.activeDate = dayKey;
-    saveState();
-  }
+  const dayKey = STATE.contentTodo.activeDate || getTodayKey();
   const day = ensureContentDay(dayKey);
   const list = $("#contentTodoList");
   if(!list) return;
