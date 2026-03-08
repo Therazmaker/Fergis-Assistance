@@ -144,9 +144,18 @@ function dateKey(d){
 
 function formatDateDMY(ymd){
   if(!ymd) return "";
-  const [y,m,d] = String(ymd).split("-");
-  if(!y || !m || !d) return "";
-  return `${pad2(Number(d))}-${pad2(Number(m))}-${y}`;
+  const raw = String(ymd).trim();
+  if(!raw) return "";
+
+  const direct = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(direct){
+    const [, y, m, d] = direct;
+    return `${d}-${m}-${y}`;
+  }
+
+  const dt = new Date(raw);
+  if(Number.isNaN(dt.getTime())) return "";
+  return `${pad2(dt.getDate())}-${pad2(dt.getMonth()+1)}-${dt.getFullYear()}`;
 }
 
 function formatDateTimeDMYHM(isoLike){
@@ -160,8 +169,12 @@ function monthKey(d=new Date()){
   const x = new Date(d);
   return `${x.getFullYear()}-${pad2(x.getMonth()+1)}`;
 }
+function isValidMonthKey(ym){
+  return /^\d{4}-(0[1-9]|1[0-2])$/.test(String(ym || ""));
+}
 function startOfMonth(ym){
-  const [y,m] = (ym||monthKey()).split("-").map(Number);
+  const safeYm = isValidMonthKey(ym) ? ym : monthKey();
+  const [y,m] = safeYm.split("-").map(Number);
   return new Date(y, (m-1), 1, 0,0,0,0);
 }
 function endOfMonth(ym){
@@ -396,7 +409,7 @@ function normalizeState_(st){
   st.ideas = Array.isArray(st.ideas) ? st.ideas : [];
   st.eventQueue = Array.isArray(st.eventQueue) ? st.eventQueue : [];
   st.planWeekId = st.planWeekId || null;
-  st.calMonth = st.calMonth || null;
+  st.calMonth = isValidMonthKey(st.calMonth) ? st.calMonth : monthKey();
   st.updatedAtMs = Number(st.updatedAtMs || Date.now());
 
   st.contentTodo = st.contentTodo || {};
@@ -2031,6 +2044,7 @@ function renderCalendar(){
   if(!cal || !lbl) return;
 
   if(!STATE.calMonth) STATE.calMonth = monthKey(new Date());
+  if(!isValidMonthKey(STATE.calMonth)) STATE.calMonth = monthKey(new Date());
 
   const first = startOfMonth(STATE.calMonth);
   const last = endOfMonth(STATE.calMonth);
@@ -2127,7 +2141,6 @@ function renderBookings(){
         </div>
         <div class="bookingActions">
         <button class="btn" data-act="bookDone" data-id="${b.id}" title="Marcar como hecha">Hecho</button>
-        ${(b.sessionRecords||[]).some(r=>r.occStartAt===o.startAt) ? `<span class="pill">log</span>` : ``}
         <button class="btn ghost" data-act="bookSession" data-id="${b.id}" data-occ="${escapeHtml(o.startAt)}" title="Abrir sesión">📝</button>
         <button class="btn ghost" data-act="bookEdit" data-id="${b.id}" title="Editar">✎</button>
         <button class="btn ghost" data-act="bookDel" data-id="${b.id}" title="Eliminar">🗑</button>
@@ -3063,12 +3076,10 @@ function openClientModal(clientId=null){
       const when = dt.toLocaleString(undefined, { year:"numeric", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
       const [lbl, cls] = bookingTypeLabel(x.b.type);
       const title = x.b.title ? escapeHtml(x.b.title) : lbl;
-      const hasLog = (x.b.sessionRecords||[]).some(r=>r.occStartAt===x.o.startAt);
-      const logPill = hasLog ? `<span class="pill">log</span>` : ``;
       return `<div class="item compact">
         <div class="itemLeft">
           <div>
-            <div class="itemTitle">${title} ${logPill}</div>
+            <div class="itemTitle">${title}</div>
             <div class="itemMeta">${escapeHtml(when)} • <span class="badge ${cls}">${lbl}</span></div>
           </div>
         </div>
@@ -3343,12 +3354,10 @@ function openDayAgendaModal(day){
     const title = b.title ? escapeHtml(b.title) : lbl;
     const info = getClientForBooking_(b);
     const client = info.display ? ` • ${escapeHtml(info.display)}` : (b.client ? ` • ${escapeHtml(b.client)}` : "");
-    const hasLog = (b.sessionRecords||[]).some(r=>r.occStartAt===o.startAt);
-    const logPill = hasLog ? `<span class="pill">log</span>` : ``;
     return `<div class="item">
       <div class="itemLeft">
         <div>
-          <div class="itemTitle">${when} • ${title} ${logPill}</div>
+          <div class="itemTitle">${when} • ${title}</div>
           <div class="itemMeta"><span class="badge ${cls}">${lbl}</span>${client}</div>
         </div>
       </div>
@@ -3431,10 +3440,10 @@ function openClientSessionModal(bookingId, occStartAt=null){
   const handleShow = info.handleShow || snap.handle || (clientStr||"");
   const headerPills = [
     sessionDate ? `<span class="pill">📅 ${escapeHtml(sessionDate)}</span>` : "",
-    sessionTime ? `<span class="pill">🕒 ${escapeHtml(sessionTime)}</span>` : "",
+    sessionTime ? `<span class="pill">🕘 Sesión ${escapeHtml(sessionTime)}</span>` : "",
     zodiac ? `<span class="pill">♈ ${escapeHtml(zodiac)}</span>` : "",
     dob ? `<span class="pill">🎂 ${escapeHtml(dob)}</span>` : "",
-    birthTime ? `<span class="pill">🕒 ${escapeHtml(birthTime)}</span>` : "",
+    birthTime ? `<span class="pill">🕒 Nacimiento ${escapeHtml(birthTime)}</span>` : "",
     birthPlace ? `<span class="pill">📍 ${escapeHtml(birthPlace)}</span>` : "",
     phone ? `<span class="pill">📞 ${escapeHtml(phone)}</span>` : "",
     handleShow ? `<span class="pill">${escapeHtml(handleShow)}</span>` : ""
