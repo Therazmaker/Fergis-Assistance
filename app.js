@@ -205,7 +205,7 @@ const CONTENT_SECTIONS = [
   ["postVideo", "🌻 Post / Video"]
 ];
 
-const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas","finanzas","archivo"];
+const APP_TABS = ["plan","contenido","clientes","sesiones11","suscripcion","lecturasPreguntas","finanzas","archivo"];
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
   { key:"preguntas", label:"Suscripciones · Preguntas", sessions:10 }
