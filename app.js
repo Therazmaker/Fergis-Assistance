@@ -12,7 +12,8 @@ const STATE_SNAPSHOT_ID = "main";
 const DEFAULT_SETTINGS = {
   syncEnabled: false,
   appsScriptUrl: "",        // ejemplo: https://script.google.com/macros/s/XXXX/exec
-  apiKey: ""                // opcional (si lo quieres validar en Apps Script)
+  apiKey: "",               // opcional (si lo quieres validar en Apps Script)
+  exchangeRate: 3.75        // tipo de cambio USD → PEN (soles)
 };
 
 // IMPORTANT:
@@ -535,7 +536,107 @@ function normalizeState_(st){
     if(!r.doneAt) r.doneAt = null;
     if(!r.dueAt) r.dueAt = null;
   }
+
+  // Gamify levels state
+  if(!st.gamify){
+    st.gamify = { monthKey: monthKey(), history: [] };
+  } else {
+    if(!st.gamify.monthKey) st.gamify.monthKey = monthKey();
+    if(!Array.isArray(st.gamify.history)) st.gamify.history = [];
+    if(st.gamify.history.length > 12) st.gamify.history = st.gamify.history.slice(-12);
+  }
+
   return st;
+}
+
+// ---------- Gamify: income-based levels ----------
+const LEVEL_THRESHOLDS = [
+  { level: 1,  xp: 0 },
+  { level: 2,  xp: 200 },
+  { level: 3,  xp: 450 },
+  { level: 4,  xp: 750 },
+  { level: 5,  xp: 1100 },
+  { level: 6,  xp: 1500 },
+  { level: 7,  xp: 2000 },
+  { level: 8,  xp: 2600 },
+  { level: 9,  xp: 3300 },
+  { level: 10, xp: 4100 },
+  { level: 11, xp: 5000 }
+];
+
+function getExchangeRate(){
+  return Number(SETTINGS.exchangeRate) > 0 ? Number(SETTINGS.exchangeRate) : 3.75;
+}
+
+function calcMonthlyIncomeSoles(){
+  const mk = monthKey();
+  const rate = getExchangeRate();
+  const entries = buildFinanceEntries ? buildFinanceEntries() : [];
+  return entries
+    .filter(e => (e.date || "").startsWith(mk))
+    .reduce((sum, e) => sum + (e.soles || 0) + (e.dolares || 0) * rate, 0);
+}
+
+function calcLevelFromSoles(soles){
+  let level = 1;
+  for(let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--){
+    if(soles >= LEVEL_THRESHOLDS[i].xp){ level = LEVEL_THRESHOLDS[i].level; break; }
+  }
+  return level;
+}
+
+function getLevelProgress(){
+  const soles = calcMonthlyIncomeSoles();
+  const level = calcLevelFromSoles(soles);
+  if(level >= 11){
+    return { level: 11, soles, nextXP: 5000, progressPercent: 100, solesLeft: 0, isMax: true };
+  }
+  const currentThreshold = LEVEL_THRESHOLDS[level - 1].xp;
+  const nextThreshold = LEVEL_THRESHOLDS[level].xp;
+  const progressPercent = Math.min(100, Math.floor(((soles - currentThreshold) / (nextThreshold - currentThreshold)) * 100));
+  return { level, soles, nextXP: nextThreshold, progressPercent, solesLeft: nextThreshold - soles, isMax: false };
+}
+
+function renderLevelDisplay(){
+  const el = document.getElementById("heroLevelDisplay");
+  if(!el) return;
+  const p = getLevelProgress();
+  const levelNames = ["","Semilla 🌱","Brote 🌿","Flor 🌸","Luz ✨","Girasol 🌻","Diosa 🌙","Estrella ⭐","Luna llena 🌕","Cosmos 🌌","Portal 🔮","Portal abierto ✨"];
+  const name = levelNames[p.level] || `Nivel ${p.level}`;
+
+  if(p.isMax){
+    el.innerHTML = `
+      <div class="level-display max-level">
+        <div class="level-badge">
+          <span class="level-number">11</span>
+          <span class="level-label">Nivel</span>
+        </div>
+        <div class="level-info">
+          <div class="level-name">${name}</div>
+          <div class="level-soles">S/ ${p.soles.toFixed(0)} este mes ✨</div>
+          <div class="level-max-text">¡Meta del mes alcanzada!</div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="level-display">
+      <div class="level-badge">
+        <span class="level-number">${p.level}</span>
+        <span class="level-label">Nivel</span>
+      </div>
+      <div class="level-info">
+        <div class="level-name">${name}</div>
+        <div class="level-progress-wrap">
+          <div class="level-progress-bar">
+            <div class="level-progress-fill" style="width:${p.progressPercent}%"></div>
+          </div>
+          <span class="level-progress-pct">${p.progressPercent}%</span>
+        </div>
+        <div class="level-soles">S/ ${p.soles.toFixed(0)} · Faltan S/ ${p.solesLeft.toFixed(0)} para nivel ${p.level + 1}</div>
+      </div>
+    </div>`;
 }
 
 // ---------- Client/booking helpers ----------
@@ -1583,19 +1684,7 @@ function renderPlan(){
 }
 
 function renderMetrics(){
-  const day = todayKey();
-  const sessionsToday = STATE.sessions.filter(s => s.day === day);
-  const totalSec = sessionsToday.reduce((a,s)=>a + (s.durationSec||0), 0);
-  $("#mActiveToday").textContent = totalSec ? formatMin(totalSec) : "0m";
-  $("#mSessionsToday").textContent = String(sessionsToday.length);
-
-  const activeContentDayKey = STATE.contentTodo.activeDate || day;
-  const contentDay = ensureContentDay(activeContentDayKey);
-  const contentPending = CONTENT_SECTIONS
-    .flatMap(([k]) => contentDay.sections[k] || [])
-    .filter(x => !x.done).length;
-  const pendingRem = STATE.reminders.filter(r => !r.doneAt).length;
-  $("#mPendingTasks").textContent = String(contentPending + pendingRem);
+  renderLevelDisplay();
 }
 
 function renderContentTodo(){
@@ -1853,6 +1942,7 @@ function totalsByClient(clientId){
 }
 
 function renderFinance(){
+  renderLevelDisplay();
   const totalsEl = $("#financeTotals");
   const chartEl = $("#financeChart");
   const rangeWrap = $("#financeRangeFilters");
@@ -3751,6 +3841,14 @@ function openSettings(){
     "Ajustes",
     `
       <div class="row">
+        <label class="label">Tipo de cambio (USD → Soles)</label>
+        <input id="mExchangeRate" class="input" type="number" min="0.01" step="0.01" value="${escapeHtml(String(SETTINGS.exchangeRate || 3.75))}" placeholder="3.75" style="max-width:120px" />
+        <div class="itemMeta">Se usa para convertir ingresos en dólares al calcular tu nivel mensual.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
         <label class="label">Sync a Google Sheets</label>
         <div style="display:flex;gap:10px;align-items:center">
           <input type="checkbox" id="mSyncEnabled" ${SETTINGS.syncEnabled ? "checked":""} />
@@ -3797,6 +3895,8 @@ function openSettings(){
     SETTINGS.syncEnabled = $("#mSyncEnabled").checked;
     SETTINGS.appsScriptUrl = $("#mScriptUrl").value.trim();
     SETTINGS.apiKey = $("#mApiKey").value.trim();
+    const newRate = parseFloat($("#mExchangeRate").value);
+    if(!isNaN(newRate) && newRate > 0) SETTINGS.exchangeRate = newRate;
     saveSettings();
     updateSyncUI();
     closeModal();
