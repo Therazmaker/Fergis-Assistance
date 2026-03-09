@@ -52,7 +52,7 @@
       </section>
 
       <section class="grid tabPanel active" data-panel="plan">
-        <section class="card">
+        <section class="card fullSpan">
           <div class="cardHead">
             <div>
               <div class="cardTitle">Plan Girasol</div>
@@ -68,47 +68,6 @@
           <div id="planList" class="list"></div>
         </section>
 
-        <section class="card">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Sesión (timer)</div>
-              <div class="cardSub">Inicia una tarea y mide tiempo. Si te pausan, lo guardamos.</div>
-            </div>
-          </div>
-
-          <div class="sessionBox">
-            <div class="row">
-              <label class="label">Tarea</label>
-              <select id="sessionTaskSelect" class="input"></select>
-            </div>
-
-            <div class="timer">
-              <div class="timerValue" id="timerValue">00:00</div>
-              <div class="timerHint" id="timerHint">Lista para empezar.</div>
-            </div>
-
-            <div class="actionsRow">
-              <button class="btn primary" id="btnStartSession">▶ Iniciar</button>
-              <button class="btn" id="btnFinishSession" disabled>✓ Terminé</button>
-              <button class="btn warn" id="btnPauseSession" disabled>⏸ Me pauso</button>
-            </div>
-
-            <div class="row">
-              <label class="label">Nota rápida</label>
-              <input id="sessionNote" class="input" placeholder="Ej: hoy me costó arrancar, pero avancé 5 min…" />
-            </div>
-          </div>
-
-          <div class="divider"></div>
-
-          <div class="cardHead compact">
-            <div>
-              <div class="cardTitle">Últimas sesiones</div>
-              <div class="cardSub">Solo informativo.</div>
-            </div>
-          </div>
-          <div id="sessionsList" class="list compactList"></div>
-        </section>
       </section>
 
       <section class="grid tabPanel contenidoGrid" data-panel="contenido">

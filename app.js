@@ -1884,6 +1884,7 @@ function renderContentTodo(){
 
 function renderSessionTaskSelect(){
   const sel = $("#sessionTaskSelect");
+  if(!sel) return;
   const day = todayKey();
   const tasksToday = STATE.tasks.filter(t => t.pinnedDay === day).slice(0,10);
   const options = [
@@ -1898,6 +1899,7 @@ function renderSessionTaskSelect(){
 
 function renderSessions(){
   const list = $("#sessionsList");
+  if(!list) return;
   const items = STATE.sessions.slice(0,6);
   if(!items.length){
     list.innerHTML = `<div class="item">
@@ -2059,19 +2061,6 @@ function buildFinanceEntries(){
       date: qr.date || todayKey(),
       soles: amountNum(qr.costSoles ?? qr.cost),
       dolares: amountNum(qr.costDolares)
-    });
-  }
-
-  for(const booking of STATE.bookings){
-    if(booking.status === "cancelled") continue;
-    const c = booking.clientId ? STATE.clients.find(x => String(x.id) === String(booking.clientId)) : findClientByBookingClientString(booking.client || "");
-    entries.push({
-      source: "booking",
-      clientId: c?.id || booking.clientId || null,
-      clientName: c?.name || c?.handle || booking.client || "",
-      date: booking.startAt || todayKey(),
-      soles: amountNum(booking.amount),
-      dolares: amountNum(booking.amountUsd)
     });
   }
 
@@ -2834,16 +2823,16 @@ function wire(){
     };
   }
 
-  $("#btnStartSession").addEventListener("click", () => {
-    const taskId = $("#sessionTaskSelect").value || null;
-    const note = $("#sessionNote").value || "";
+  $("#btnStartSession")?.addEventListener("click", () => {
+    const taskId = $("#sessionTaskSelect")?.value || null;
+    const note = $("#sessionNote")?.value || "";
     startSession(taskId, note);
-    $("#sessionNote").value = "";
+    if($("#sessionNote")) $("#sessionNote").value = "";
   });
 
-  $("#btnFinishSession").addEventListener("click", () => finishSession("done"));
+  $("#btnFinishSession")?.addEventListener("click", () => finishSession("done"));
 
-  $("#btnPauseSession").addEventListener("click", () => {
+  $("#btnPauseSession")?.addEventListener("click", () => {
     openModal(
       "Me pauso",
       `
