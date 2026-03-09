@@ -597,44 +597,189 @@ function getLevelProgress(){
   return { level, soles, nextXP: nextThreshold, progressPercent, solesLeft: nextThreshold - soles, isMax: false };
 }
 
+function getSunflowerSVG(level){
+  // Each level is a stage of a sunflower's growth, rendered as SVG
+  const svgs = {
+    // Nivel 1: Semilla bajo tierra
+    1: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="26" cy="36" rx="14" ry="8" fill="#5c3d1e" opacity="0.5"/>
+      <ellipse cx="26" cy="36" rx="7" ry="4.5" fill="#8B6040"/>
+      <ellipse cx="24" cy="35" rx="2.5" ry="3.5" fill="#6B4A2A" transform="rotate(-10 24 35)"/>
+      <line x1="26" y1="32" x2="26" y2="26" stroke="#6B9E3A" stroke-width="2" stroke-linecap="round"/>
+      <path d="M26 26 Q22 22 23 18" stroke="#6B9E3A" stroke-width="1.5" stroke-linecap="round" fill="none"/>
+    </svg>`,
+    // Nivel 2: Brote asomando
+    2: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="26" y1="44" x2="26" y2="24" stroke="#5a8a2a" stroke-width="2.5" stroke-linecap="round"/>
+      <ellipse cx="26" cy="44" rx="10" ry="5" fill="#5c3d1e" opacity="0.4"/>
+      <path d="M26 30 Q20 26 21 20 Q26 23 26 30Z" fill="#7ab83a"/>
+      <path d="M26 30 Q32 26 31 20 Q26 23 26 30Z" fill="#6aa82a"/>
+      <circle cx="26" cy="20" r="3" fill="#8dc63f"/>
+    </svg>`,
+    // Nivel 3: Tallo con hojitas
+    3: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="26" y1="46" x2="26" y2="18" stroke="#5a8a2a" stroke-width="3" stroke-linecap="round"/>
+      <path d="M26 38 Q18 33 17 26 Q24 29 26 38Z" fill="#7ab83a"/>
+      <path d="M26 32 Q34 27 35 20 Q28 23 26 32Z" fill="#6aa82a"/>
+      <path d="M26 18 Q22 13 23 8 Q28 12 26 18Z" fill="#8dc63f"/>
+      <path d="M26 18 Q30 13 29 8 Q24 12 26 18Z" fill="#7ab83a"/>
+      <circle cx="26" cy="16" r="3.5" fill="#a0c840"/>
+    </svg>`,
+    // Nivel 4: Capullo verde cerrado
+    4: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="26" y1="48" x2="26" y2="24" stroke="#5a8a2a" stroke-width="3" stroke-linecap="round"/>
+      <path d="M26 38 Q16 33 15 24 Q23 27 26 38Z" fill="#7ab83a"/>
+      <path d="M26 34 Q36 29 37 20 Q29 23 26 34Z" fill="#6aa82a"/>
+      <ellipse cx="26" cy="18" rx="7" ry="9" fill="#4a7a20"/>
+      <ellipse cx="26" cy="17" rx="5" ry="7" fill="#5a9a28"/>
+      <ellipse cx="25" cy="15" rx="2.5" ry="4" fill="#6ab030" transform="rotate(-5 25 15)"/>
+    </svg>`,
+    // Nivel 5: Capullo amarillo abriendo
+    5: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="26" y1="48" x2="26" y2="22" stroke="#5a8a2a" stroke-width="3" stroke-linecap="round"/>
+      <path d="M26 36 Q15 31 14 22 Q23 25 26 36Z" fill="#7ab83a"/>
+      <path d="M26 32 Q37 27 38 18 Q29 21 26 32Z" fill="#6aa82a"/>
+      <ellipse cx="26" cy="16" rx="8" ry="8" fill="#4a7a20"/>
+      <path d="M26 8 Q19 12 20 18 Q26 14 26 8Z" fill="#f0c020" opacity="0.9"/>
+      <path d="M26 8 Q33 12 32 18 Q26 14 26 8Z" fill="#e8b818" opacity="0.9"/>
+      <path d="M18 14 Q16 21 22 22 Q21 16 18 14Z" fill="#f0c020" opacity="0.7"/>
+      <path d="M34 14 Q36 21 30 22 Q31 16 34 14Z" fill="#e8b818" opacity="0.7"/>
+      <circle cx="26" cy="17" r="5" fill="#5c3d1e"/>
+    </svg>`,
+    // Nivel 6: Girasol pequeño abierto
+    6: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="26" y1="50" x2="26" y2="28" stroke="#5a8a2a" stroke-width="3" stroke-linecap="round"/>
+      <path d="M26 40 Q14 34 13 24 Q23 28 26 40Z" fill="#7ab83a"/>
+      <path d="M26 36 Q38 30 39 20 Q29 24 26 36Z" fill="#6aa82a"/>
+      ${[0,45,90,135,180,225,270,315].map(a=>`<ellipse cx="${26+Math.cos(a*Math.PI/180)*10}" cy="${18+Math.sin(a*Math.PI/180)*10}" rx="4" ry="6.5" fill="#f6c000" transform="rotate(${a} ${26+Math.cos(a*Math.PI/180)*10} ${18+Math.sin(a*Math.PI/180)*10})"/>`).join("")}
+      <circle cx="26" cy="18" r="7" fill="#5c3d1e"/>
+      <circle cx="24" cy="16" r="1.2" fill="#3a2010" opacity="0.6"/>
+      <circle cx="27" cy="16" r="1.2" fill="#3a2010" opacity="0.6"/>
+      <circle cx="25.5" cy="19" r="1.2" fill="#3a2010" opacity="0.6"/>
+    </svg>`,
+    // Nivel 7: Girasol mediano
+    7: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="26" y1="50" x2="26" y2="26" stroke="#4a7a20" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M26 40 Q12 33 11 22 Q23 27 26 40Z" fill="#7ab83a"/>
+      <path d="M26 36 Q40 29 41 18 Q29 23 26 36Z" fill="#6aa82a"/>
+      ${[0,30,60,90,120,150,180,210,240,270,300,330].map(a=>`<ellipse cx="${26+Math.cos(a*Math.PI/180)*11}" cy="${19+Math.sin(a*Math.PI/180)*11}" rx="3.5" ry="6" fill="${a%60===0?'#f6c000':'#e8b000'}" transform="rotate(${a} ${26+Math.cos(a*Math.PI/180)*11} ${19+Math.sin(a*Math.PI/180)*11})"/>`).join("")}
+      <circle cx="26" cy="19" r="8" fill="#4a2e10"/>
+      <circle cx="23" cy="17" r="1.3" fill="#2a1a08" opacity="0.7"/>
+      <circle cx="27" cy="17" r="1.3" fill="#2a1a08" opacity="0.7"/>
+      <circle cx="25" cy="20" r="1.3" fill="#2a1a08" opacity="0.7"/>
+      <circle cx="29" cy="20" r="1.1" fill="#2a1a08" opacity="0.6"/>
+    </svg>`,
+    // Nivel 8: Girasol grande
+    8: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="26" y1="52" x2="26" y2="24" stroke="#3d6b18" stroke-width="4" stroke-linecap="round"/>
+      <path d="M26 42 Q10 34 9 20 Q23 26 26 42Z" fill="#6aab30"/>
+      <path d="M26 38 Q42 30 43 16 Q29 22 26 38Z" fill="#5a9a28"/>
+      ${[0,22,45,68,90,112,135,158,180,202,225,248,270,292,315,338].map(a=>`<ellipse cx="${26+Math.cos(a*Math.PI/180)*12}" cy="${18+Math.sin(a*Math.PI/180)*12}" rx="3" ry="6.5" fill="${a%45===0?'#f8c800':'#f0b800'}" transform="rotate(${a} ${26+Math.cos(a*Math.PI/180)*12} ${18+Math.sin(a*Math.PI/180)*12})"/>`).join("")}
+      <circle cx="26" cy="18" r="9" fill="#3d2008"/>
+      <circle cx="22" cy="16" r="1.4" fill="#1e1004" opacity="0.8"/>
+      <circle cx="26" cy="15" r="1.4" fill="#1e1004" opacity="0.8"/>
+      <circle cx="30" cy="16" r="1.4" fill="#1e1004" opacity="0.8"/>
+      <circle cx="24" cy="20" r="1.4" fill="#1e1004" opacity="0.8"/>
+      <circle cx="28" cy="20" r="1.4" fill="#1e1004" opacity="0.8"/>
+    </svg>`,
+    // Nivel 9: Girasol radiante
+    9: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="26" cy="16" r="16" fill="rgba(248,200,0,0.12)"/>
+      <line x1="26" y1="52" x2="26" y2="22" stroke="#3d6b18" stroke-width="4" stroke-linecap="round"/>
+      <path d="M26 42 Q9 33 8 18 Q23 25 26 42Z" fill="#6aab30"/>
+      <path d="M26 38 Q43 29 44 14 Q29 21 26 38Z" fill="#5a9a28"/>
+      ${[0,20,40,60,80,100,120,140,160,180,200,220,240,260,280,300,320,340].map(a=>`<ellipse cx="${26+Math.cos(a*Math.PI/180)*13}" cy="${16+Math.sin(a*Math.PI/180)*13}" rx="3" ry="7" fill="${a%40===0?'#fad000':'#f2b800'}" transform="rotate(${a} ${26+Math.cos(a*Math.PI/180)*13} ${16+Math.sin(a*Math.PI/180)*13})"/>`).join("")}
+      <circle cx="26" cy="16" r="8.5" fill="#3d2008"/>
+      <circle cx="22" cy="13" r="1.5" fill="#1e1004" opacity="0.9"/>
+      <circle cx="26" cy="13" r="1.5" fill="#1e1004" opacity="0.9"/>
+      <circle cx="30" cy="13" r="1.5" fill="#1e1004" opacity="0.9"/>
+      <circle cx="23" cy="17" r="1.5" fill="#1e1004" opacity="0.9"/>
+      <circle cx="27" cy="17" r="1.5" fill="#1e1004" opacity="0.9"/>
+      <circle cx="31" cy="17" r="1.5" fill="#1e1004" opacity="0.9"/>
+    </svg>`,
+    // Nivel 10: Girasol glorioso con destellos
+    10: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="26" cy="15" r="18" fill="rgba(255,210,0,0.15)"/>
+      <circle cx="26" cy="15" r="13" fill="rgba(255,220,0,0.1)"/>
+      <line x1="26" y1="52" x2="26" y2="22" stroke="#3d6b18" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M26 42 Q8 32 7 16 Q23 24 26 42Z" fill="#6aab30"/>
+      <path d="M26 38 Q44 28 45 12 Q29 20 26 38Z" fill="#5a9a28"/>
+      ${[0,18,36,54,72,90,108,126,144,162,180,198,216,234,252,270,288,306,324,342].map(a=>`<ellipse cx="${26+Math.cos(a*Math.PI/180)*13.5}" cy="${15+Math.sin(a*Math.PI/180)*13.5}" rx="2.8" ry="7.5" fill="${a%36===0?'#ffe000':'#f8c800'}" transform="rotate(${a} ${26+Math.cos(a*Math.PI/180)*13.5} ${15+Math.sin(a*Math.PI/180)*13.5})"/>`).join("")}
+      <circle cx="26" cy="15" r="9" fill="#3d2008"/>
+      <circle cx="22" cy="12" r="1.5" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="26" cy="12" r="1.5" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="30" cy="12" r="1.5" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="23" cy="16" r="1.5" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="27" cy="16" r="1.5" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="31" cy="16" r="1.5" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="25" cy="19" r="1.3" fill="#1a0e04" opacity="0.8"/>
+      <circle cx="29" cy="19" r="1.3" fill="#1a0e04" opacity="0.8"/>
+      <line x1="6" y1="4" x2="8" y2="7" stroke="#ffe000" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+      <line x1="46" y1="4" x2="44" y2="7" stroke="#ffe000" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+      <line x1="4" y1="15" x2="7" y2="15" stroke="#ffe000" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+      <line x1="48" y1="15" x2="45" y2="15" stroke="#ffe000" stroke-width="1.5" stroke-linecap="round" opacity="0.7"/>
+    </svg>`,
+    // Nivel 11: Girasol resplandeciente máximo con rayos de luz
+    11: `<svg viewBox="0 0 52 52" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="26" cy="14" r="20" fill="rgba(255,220,0,0.2)"/>
+      <circle cx="26" cy="14" r="15" fill="rgba(255,230,0,0.15)"/>
+      <circle cx="26" cy="14" r="10" fill="rgba(255,240,0,0.1)"/>
+      ${[0,45,90,135,180,225,270,315].map(a=>`<line x1="${26+Math.cos(a*Math.PI/180)*16}" y1="${14+Math.sin(a*Math.PI/180)*16}" x2="${26+Math.cos(a*Math.PI/180)*22}" y2="${14+Math.sin(a*Math.PI/180)*22}" stroke="#ffe000" stroke-width="1.8" stroke-linecap="round" opacity="0.6"/>`).join("")}
+      <line x1="26" y1="50" x2="26" y2="22" stroke="#3d6b18" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M26 42 Q7 31 6 14 Q23 23 26 42Z" fill="#6aab30"/>
+      <path d="M26 38 Q45 27 46 10 Q29 19 26 38Z" fill="#5a9a28"/>
+      ${[0,16,32,48,64,80,96,112,128,144,160,176,192,208,224,240,256,272,288,304,320,336].map(a=>`<ellipse cx="${26+Math.cos(a*Math.PI/180)*14}" cy="${14+Math.sin(a*Math.PI/180)*14}" rx="2.8" ry="8" fill="${a%32===0?'#ffe800':'#ffd000'}" transform="rotate(${a} ${26+Math.cos(a*Math.PI/180)*14} ${14+Math.sin(a*Math.PI/180)*14})" opacity="0.97"/>`).join("")}
+      <circle cx="26" cy="14" r="9.5" fill="#3d2008"/>
+      <circle cx="22" cy="11" r="1.6" fill="#1a0e04" opacity="0.95"/>
+      <circle cx="26" cy="11" r="1.6" fill="#1a0e04" opacity="0.95"/>
+      <circle cx="30" cy="11" r="1.6" fill="#1a0e04" opacity="0.95"/>
+      <circle cx="23" cy="15" r="1.6" fill="#1a0e04" opacity="0.95"/>
+      <circle cx="27" cy="15" r="1.6" fill="#1a0e04" opacity="0.95"/>
+      <circle cx="31" cy="15" r="1.6" fill="#1a0e04" opacity="0.95"/>
+      <circle cx="24" cy="19" r="1.4" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="28" cy="19" r="1.4" fill="#1a0e04" opacity="0.9"/>
+      <circle cx="5" cy="3" r="1.2" fill="#ffe000" opacity="0.9"/>
+      <circle cx="47" cy="3" r="1.2" fill="#ffe000" opacity="0.9"/>
+      <circle cx="3" cy="14" r="1" fill="#ffe000" opacity="0.8"/>
+      <circle cx="49" cy="14" r="1" fill="#ffe000" opacity="0.8"/>
+      <circle cx="8" cy="26" r="0.9" fill="#ffe000" opacity="0.7"/>
+      <circle cx="44" cy="26" r="0.9" fill="#ffe000" opacity="0.7"/>
+    </svg>`
+  };
+  return svgs[level] || svgs[1];
+}
+
 function renderLevelDisplay(){
   const el = document.getElementById("heroLevelDisplay");
   if(!el) return;
   const p = getLevelProgress();
-  const levelNames = ["","Semilla 🌱","Brote 🌿","Flor 🌸","Luz ✨","Girasol 🌻","Diosa 🌙","Estrella ⭐","Luna llena 🌕","Cosmos 🌌","Portal 🔮","Portal abierto ✨"];
+  const levelNames = [
+    "","Semilla","Germinando","Primer brote","Creciendo","Casi flor",
+    "Abriendo","Girasol joven","Floreciendo","Radiante","Gloriosa","¡Girasol de luz! ✨"
+  ];
   const name = levelNames[p.level] || `Nivel ${p.level}`;
-
-  if(p.isMax){
-    el.innerHTML = `
-      <div class="level-display max-level">
-        <div class="level-badge">
-          <span class="level-number">11</span>
-          <span class="level-label">Nivel</span>
-        </div>
-        <div class="level-info">
-          <div class="level-name">${name}</div>
-          <div class="level-soles">S/ ${p.soles.toFixed(0)} este mes ✨</div>
-          <div class="level-max-text">¡Meta del mes alcanzada!</div>
-        </div>
-      </div>`;
-    return;
-  }
+  const svg = getSunflowerSVG(p.level);
+  const isMax = p.isMax;
 
   el.innerHTML = `
-    <div class="level-display">
-      <div class="level-badge">
-        <span class="level-number">${p.level}</span>
-        <span class="level-label">Nivel</span>
-      </div>
+    <div class="level-display${isMax ? " max-level" : ""}">
+      <div class="level-svg-wrap${isMax ? " max-glow" : ""}">${svg}</div>
       <div class="level-info">
-        <div class="level-name">${name}</div>
-        <div class="level-progress-wrap">
-          <div class="level-progress-bar">
-            <div class="level-progress-fill" style="width:${p.progressPercent}%"></div>
-          </div>
-          <span class="level-progress-pct">${p.progressPercent}%</span>
+        <div class="level-header">
+          <span class="level-badge-num">${p.level}</span>
+          <span class="level-name">${name}</span>
         </div>
-        <div class="level-soles">S/ ${p.soles.toFixed(0)} · Faltan S/ ${p.solesLeft.toFixed(0)} para nivel ${p.level + 1}</div>
+        ${isMax
+          ? `<div class="level-soles">S/ ${p.soles.toFixed(0)} este mes ✨</div>
+             <div class="level-max-text">¡Meta del mes alcanzada!</div>`
+          : `<div class="level-progress-wrap">
+               <div class="level-progress-bar">
+                 <div class="level-progress-fill" style="width:${p.progressPercent}%"></div>
+               </div>
+               <span class="level-progress-pct">${p.progressPercent}%</span>
+             </div>
+             <div class="level-soles">S/ ${p.soles.toFixed(0)} · Faltan S/ ${p.solesLeft.toFixed(0)} para nivel ${p.level + 1}</div>`
+        }
       </div>
     </div>`;
 }
