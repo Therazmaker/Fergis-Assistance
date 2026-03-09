@@ -97,6 +97,7 @@ body{
   grid-template-columns: 1fr 1fr;
   gap:14px;
 }
+.contenidoGrid{grid-template-columns:minmax(540px,1.35fr) minmax(320px,.95fr)}
 .clientsGrid{grid-template-columns: minmax(280px,1fr) minmax(280px,1fr) minmax(420px,1.35fr);}
 .grid.tabPanel{display:none}
 .grid.tabPanel.active{display:grid}
