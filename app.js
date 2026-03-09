@@ -553,15 +553,15 @@ function normalizeState_(st){
 const LEVEL_THRESHOLDS = [
   { level: 1,  xp: 0 },
   { level: 2,  xp: 200 },
-  { level: 3,  xp: 450 },
-  { level: 4,  xp: 750 },
-  { level: 5,  xp: 1100 },
-  { level: 6,  xp: 1500 },
-  { level: 7,  xp: 2000 },
-  { level: 8,  xp: 2600 },
-  { level: 9,  xp: 3300 },
-  { level: 10, xp: 4100 },
-  { level: 11, xp: 5000 }
+  { level: 3,  xp: 400 },
+  { level: 4,  xp: 600 },
+  { level: 5,  xp: 800 },
+  { level: 6,  xp: 1000 },
+  { level: 7,  xp: 1200 },
+  { level: 8,  xp: 1400 },
+  { level: 9,  xp: 1600 },
+  { level: 10, xp: 1800 },
+  { level: 11, xp: 2000 }
 ];
 
 function getExchangeRate(){
@@ -588,8 +588,9 @@ function calcLevelFromSoles(soles){
 function getLevelProgress(){
   const soles = calcMonthlyIncomeSoles();
   const level = calcLevelFromSoles(soles);
+  const maxThreshold = LEVEL_THRESHOLDS[LEVEL_THRESHOLDS.length - 1].xp;
   if(level >= 11){
-    return { level: 11, soles, nextXP: 5000, progressPercent: 100, solesLeft: 0, isMax: true };
+    return { level: 11, soles, nextXP: maxThreshold, progressPercent: 100, solesLeft: 0, isMax: true };
   }
   const currentThreshold = LEVEL_THRESHOLDS[level - 1].xp;
   const nextThreshold = LEVEL_THRESHOLDS[level].xp;
