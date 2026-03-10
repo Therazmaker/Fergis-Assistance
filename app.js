@@ -4,6 +4,7 @@
 
 const LS_KEY = "fa_v01_state";
 const SETTINGS_KEY = "fa_v01_settings";
+const SYNC_META_KEY = "fa_v01_sync_meta";
 const DB_NAME = "fergis_assistant_db";
 const DB_VERSION = 1;
 const STATE_STORE = "state_snapshots";
@@ -206,6 +207,28 @@ const CONTENT_SECTIONS = [
 ];
 
 const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas","finanzas","archivo"];
+const TAB_SYNC_IDS = {
+  plan: "plan_girasol",
+  contenido: "contenido_hoy",
+  investigacion: "ideas_investigacion",
+  clientes: "clientes_calendario",
+  sesiones11: "sesiones_1_1",
+  suscripcion: "suscripcion_diosa_guia",
+  lecturasPreguntas: "lecturas_preguntas",
+  finanzas: "finanzas",
+  archivo: "archivo"
+};
+const TAB_SYNC_DEFAULTS = {
+  plan_girasol: { tasks: [], planWeekId: null },
+  contenido_hoy: { contentTodo: { activeDate: todayKey(), days: {}, historyOrder: [] }, reminders: [] },
+  ideas_investigacion: { ideas: [] },
+  clientes_calendario: { clients: [], nextSteps: [], bookings: [], calMonth: monthKey() },
+  sesiones_1_1: { oneToOneSessions: { viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth()+1, entries: [] } },
+  suscripcion_diosa_guia: { subscriptions: { viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth()+1, entries: [] } },
+  lecturas_preguntas: { questionReadings: { viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth()+1, entries: [] } },
+  finanzas: { financeRange: "1M" },
+  archivo: { sessions: [] }
+};
 const SUBSCRIPTION_TYPES = [
   { key:"oneToOne", label:"Suscripciones · 1:1", sessions:4 },
   { key:"preguntas", label:"Suscripciones · Preguntas", sessions:10 }
@@ -395,6 +418,38 @@ function loadSettings(){
 }
 function saveSettings(){
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS));
+}
+
+function loadSyncMeta(){
+  try{
+    const raw = localStorage.getItem(SYNC_META_KEY);
+    if(raw && typeof raw === "string"){
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    }
+  }catch(e){ console.warn("Sync meta parse error", e); }
+  return {};
+}
+
+function saveSyncMeta(){
+  try{
+    localStorage.setItem(SYNC_META_KEY, JSON.stringify(SYNC_META));
+  }catch(e){
+    console.warn("Sync meta save error", e);
+  }
+}
+
+function ensureSyncMetaTab(tabId){
+  if(!SYNC_META[tabId] || typeof SYNC_META[tabId] !== "object"){
+    SYNC_META[tabId] = {
+      lastLocalUpdatedAt: null,
+      lastRemoteUpdatedAt: null,
+      lastPushAt: null,
+      lastPullAt: null,
+      status: "idle"
+    };
+  }
+  return SYNC_META[tabId];
 }
 
 // ---------- State normalization ----------
@@ -1291,51 +1346,7 @@ function deleteIdea(id){
 
 // ---------- Sync ----------
 async function syncNow(){
-  const statusEl = document.querySelector("#syncStatus");
-  const btn = document.querySelector("#btnSync");
-
-  if(!SETTINGS.syncEnabled || !SETTINGS.appsScriptUrl){
-    statusEl.textContent = "Sync: desactivado";
-    toast("Sync desactivado. Actívalo en Ajustes.");
-    return;
-  }
-
-  const pending = STATE.eventQueue.filter(e => !e.syncedAt);
-  const snapshotEvent = {
-    id: uid("evt"),
-    type: "state_snapshot",
-    payload: buildStateSnapshotPayload_(),
-    ts: nowISO(),
-    syncedAt: null
-  };
-  const outbound = [...pending, snapshotEvent];
-
-  btn.disabled = true;
-  statusEl.textContent = `Sync: enviando ${outbound.length}…`;
-
-  try{
-    await fetch(SETTINGS.appsScriptUrl, {
-      method: "POST",
-      mode: "no-cors",
-      body: JSON.stringify({
-        app: "FergisAssistant",
-        v: "0.1",
-        apiKey: SETTINGS.apiKey || "",
-        deviceTs: nowISO(),
-        events: outbound
-      })
-    });
-
-    markEventsSynced(pending.map(e => e.id));
-    statusEl.textContent = "Sync: enviado ✅ (snapshot incluido)";
-    toast(`Enviado a Sheet. Snapshot + ${pending.length} cambios.`);
-  }catch(err){
-    console.warn("Sync error", err);
-    statusEl.textContent = "Sync: error ⚠";
-    toast("Falló el envío (red). Reintenta.");
-  }finally{
-    btn.disabled = false;
-  }
+  await pushCurrentTabToSheet();
 }
 
 function buildAppsScriptUrl_(params={}){
@@ -1463,46 +1474,193 @@ function applySheetStateSnapshot_(sheetState){
 }
 
 async function syncFromSheet(){
-  const statusEl = document.querySelector("#syncStatus");
-  const btn = document.querySelector("#btnSheetPull");
-
-  if(!SETTINGS.appsScriptUrl){
-    statusEl.textContent = "Sync: desactivado";
-    toast("Falta la URL del Apps Script en Ajustes.");
-    return;
-  }
-
-  btn.disabled = true;
-  statusEl.textContent = "Sync: leyendo desde Sheet…";
-
-  try{
-    const url = buildAppsScriptUrl_({
-      action: "export",
-      apiKey: SETTINGS.apiKey || "",
-      app: "FergisAssistant"
-    });
-
-    const res = await loadJsonp_(url, 20000);
-    if(!res || res.ok !== true){
-      throw new Error(res?.error || "Apps Script devolvió una respuesta inválida");
-    }
-
-    applySheetStateSnapshot_(res.state || {});
-    statusEl.textContent = "Sync: bajado desde Sheet ✅";
-    toast("Datos del Sheet importados al asistente.");
-  }catch(err){
-    console.warn("Sheet import error", err);
-    statusEl.textContent = "Sync: error al leer Sheet ⚠";
-    toast(err?.message || "No pude traer los datos desde Google Sheets.");
-  }finally{
-    btn.disabled = false;
-  }
+  await pullCurrentTabFromSheet();
 }
 
+
+function sanitizeTabPayload(tabId, data){
+  return stripLargeDataForSync_(data || TAB_SYNC_DEFAULTS[tabId] || {});
+}
+
+function getTabIdFromActiveTab(activeTab){
+  return TAB_SYNC_IDS[activeTab] || "plan_girasol";
+}
+
+function getTabSyncPayload(tabId, state){
+  const st = normalizeState_(JSON.parse(JSON.stringify(state || {})));
+  const updatedAt = nowISO();
+  let data = {};
+  if(tabId === "plan_girasol") data = { tasks: st.tasks || [], planWeekId: st.planWeekId || null };
+  else if(tabId === "contenido_hoy") data = { contentTodo: st.contentTodo || TAB_SYNC_DEFAULTS[tabId].contentTodo, reminders: st.reminders || [] };
+  else if(tabId === "ideas_investigacion") data = { ideas: st.ideas || [] };
+  else if(tabId === "clientes_calendario") data = { clients: st.clients || [], nextSteps: st.nextSteps || [], bookings: st.bookings || [], calMonth: st.calMonth || monthKey() };
+  else if(tabId === "sesiones_1_1") data = { oneToOneSessions: st.oneToOneSessions || TAB_SYNC_DEFAULTS[tabId].oneToOneSessions };
+  else if(tabId === "suscripcion_diosa_guia") data = { subscriptions: st.subscriptions || TAB_SYNC_DEFAULTS[tabId].subscriptions };
+  else if(tabId === "lecturas_preguntas") data = { questionReadings: st.questionReadings || TAB_SYNC_DEFAULTS[tabId].questionReadings };
+  else if(tabId === "finanzas") data = { financeRange: st.financeRange || "1M" };
+  else if(tabId === "archivo") data = { sessions: st.sessions || [] };
+  else data = TAB_SYNC_DEFAULTS[tabId] || {};
+  return { tabId, updatedAt, data: sanitizeTabPayload(tabId, data) };
+}
+
+function applyTabSyncPayload(tabId, payload, state){
+  const st = normalizeState_(JSON.parse(JSON.stringify(state || {})));
+  const incoming = payload?.data || TAB_SYNC_DEFAULTS[tabId] || {};
+  if(tabId === "plan_girasol"){
+    st.tasks = Array.isArray(incoming.tasks) ? incoming.tasks : st.tasks;
+    st.planWeekId = incoming.planWeekId ?? st.planWeekId;
+  }else if(tabId === "contenido_hoy"){
+    st.contentTodo = incoming.contentTodo || st.contentTodo;
+    st.reminders = Array.isArray(incoming.reminders) ? incoming.reminders : st.reminders;
+  }else if(tabId === "ideas_investigacion"){
+    st.ideas = Array.isArray(incoming.ideas) ? incoming.ideas : st.ideas;
+  }else if(tabId === "clientes_calendario"){
+    st.clients = Array.isArray(incoming.clients) ? incoming.clients : st.clients;
+    st.nextSteps = Array.isArray(incoming.nextSteps) ? incoming.nextSteps : st.nextSteps;
+    st.bookings = Array.isArray(incoming.bookings) ? incoming.bookings : st.bookings;
+    st.calMonth = incoming.calMonth || st.calMonth;
+  }else if(tabId === "sesiones_1_1"){
+    st.oneToOneSessions = incoming.oneToOneSessions || st.oneToOneSessions;
+  }else if(tabId === "suscripcion_diosa_guia"){
+    st.subscriptions = incoming.subscriptions || st.subscriptions;
+  }else if(tabId === "lecturas_preguntas"){
+    st.questionReadings = incoming.questionReadings || st.questionReadings;
+  }else if(tabId === "finanzas"){
+    st.financeRange = incoming.financeRange || st.financeRange;
+  }else if(tabId === "archivo"){
+    st.sessions = Array.isArray(incoming.sessions) ? incoming.sessions : st.sessions;
+  }
+  st.updatedAtMs = Date.now();
+  return normalizeState_(st);
+}
+
+function getAllTabSyncPayloads(state){
+  return Object.values(TAB_SYNC_IDS).map((tabId) => getTabSyncPayload(tabId, state));
+}
+
+function mergeRemoteTabIntoState(tabId, remotePayload, currentState){
+  const meta = ensureSyncMetaTab(tabId);
+  const localUpdatedAt = Date.parse(meta.lastLocalUpdatedAt || "") || 0;
+  const remoteUpdatedAt = Date.parse(remotePayload?.updatedAt || "") || 0;
+
+  if(remoteUpdatedAt > localUpdatedAt){
+    console.info(`[SheetSync] pullTab applied remote tab: ${tabId}`);
+    meta.status = "synced";
+    meta.lastRemoteUpdatedAt = remotePayload.updatedAt || nowISO();
+    meta.lastPullAt = nowISO();
+    saveSyncMeta();
+    return applyTabSyncPayload(tabId, remotePayload, currentState);
+  }
+
+  if(localUpdatedAt > remoteUpdatedAt){
+    meta.status = "conflict";
+    meta.lastRemoteUpdatedAt = remotePayload?.updatedAt || meta.lastRemoteUpdatedAt;
+    meta.lastPullAt = nowISO();
+    saveSyncMeta();
+    console.warn(`[SheetSync] conflict detected on ${tabId}`);
+    return currentState;
+  }
+
+  meta.status = "synced";
+  meta.lastPullAt = nowISO();
+  saveSyncMeta();
+  return applyTabSyncPayload(tabId, remotePayload, currentState);
+}
+
+async function sheetSyncGet_(action, tabId=""){
+  const url = buildAppsScriptUrl_({ action, tabId, app: "FergisAssistant", v: "1.0", apiKey: SETTINGS.apiKey || "" });
+  const res = await loadJsonp_(url, 20000);
+  if(!res || res.ok !== true) throw new Error(res?.error || "Respuesta inválida de Apps Script");
+  return res;
+}
+
+async function sheetSyncPost_(body){
+  const res = await fetch(String(SETTINGS.appsScriptUrl || "").trim(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const text = await res.text();
+  if(!text) return { ok: true };
+  try{ return JSON.parse(text); }catch(_e){ return { ok: true, raw: text }; }
+}
+
+async function pushCurrentTabToSheet(){
+  const tabId = getTabIdFromActiveTab(STATE.activeTab);
+  const statusEl = $("#syncStatus");
+  const meta = ensureSyncMetaTab(tabId);
+  meta.status = "syncing";
+  saveSyncMeta();
+  statusEl.textContent = `Sync: enviando ${tabId}…`;
+  const tab = getTabSyncPayload(tabId, STATE);
+  await sheetSyncPost_({ app: "FergisAssistant", v: "1.0", action: "pushTab", deviceTs: nowISO(), tab });
+  meta.lastLocalUpdatedAt = tab.updatedAt;
+  meta.lastRemoteUpdatedAt = tab.updatedAt;
+  meta.lastPushAt = nowISO();
+  meta.status = "synced";
+  saveSyncMeta();
+  console.info(`[SheetSync] pushTab success: ${tabId}`);
+  statusEl.textContent = `Sync: ${tabId} ✅`;
+}
+
+async function pullCurrentTabFromSheet(){
+  const tabId = getTabIdFromActiveTab(STATE.activeTab);
+  const statusEl = $("#syncStatus");
+  const meta = ensureSyncMetaTab(tabId);
+  meta.status = "syncing";
+  saveSyncMeta();
+  statusEl.textContent = `Sync: trayendo ${tabId}…`;
+  const res = await sheetSyncGet_("pullTab", tabId);
+  if(res?.tab){
+    STATE = mergeRemoteTabIntoState(tabId, res.tab, STATE);
+    saveState();
+    render();
+    meta.lastRemoteUpdatedAt = res.tab.updatedAt || meta.lastRemoteUpdatedAt;
+    meta.lastPullAt = nowISO();
+    if(meta.status !== "conflict") meta.status = "synced";
+    saveSyncMeta();
+  }
+  statusEl.textContent = `Sync: ${tabId} ↓`;
+}
+
+async function pushAllTabsToSheet(){
+  const statusEl = $("#syncStatus");
+  statusEl.textContent = "Sync: enviando todas…";
+  const tabs = getAllTabSyncPayloads(STATE);
+  await sheetSyncPost_({ app: "FergisAssistant", v: "1.0", action: "pushAll", deviceTs: nowISO(), tabs });
+  const ts = nowISO();
+  for(const tab of tabs){
+    const meta = ensureSyncMetaTab(tab.tabId);
+    meta.lastLocalUpdatedAt = tab.updatedAt;
+    meta.lastRemoteUpdatedAt = tab.updatedAt;
+    meta.lastPushAt = ts;
+    meta.status = "synced";
+    console.info(`[SheetSync] pushTab success: ${tab.tabId}`);
+  }
+  saveSyncMeta();
+  statusEl.textContent = "Sync: todo enviado ✅";
+}
+
+async function pullAllTabsFromSheet(){
+  const statusEl = $("#syncStatus");
+  statusEl.textContent = "Sync: trayendo todas…";
+  const res = await sheetSyncGet_("pullAll");
+  let next = STATE;
+  for(const tab of (res.tabs || [])){
+    if(!tab?.tabId) continue;
+    next = mergeRemoteTabIntoState(tab.tabId, tab, next);
+  }
+  STATE = normalizeState_(next);
+  saveState();
+  render();
+  console.info("[SheetSync] pullAll completed");
+  statusEl.textContent = "Sync: pullAll ✅";
+}
 
 // ---------- UI ----------
 STATE = normalizeState_(loadState());
 let SETTINGS = loadSettings();
+let SYNC_META = loadSyncMeta();
 
 function $(sel){ return document.querySelector(sel); }
 function escapeHtml(s){ return (s||"").replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
@@ -2637,8 +2795,11 @@ function updateSyncUI(){
     el.textContent = "Sync: desactivado";
     return;
   }
+  const tabId = getTabIdFromActiveTab(STATE.activeTab);
+  const meta = ensureSyncMetaTab(tabId);
   const pending = STATE.eventQueue.filter(e => !e.syncedAt).length;
-  el.textContent = pending ? `Sync: ${pending} pendientes` : "Sync: al día ✅";
+  const status = meta.status || "idle";
+  el.textContent = `Sync(${tabId}): ${status}${pending ? ` · ${pending} evt pendientes` : ""}`;
 }
 
 function setSessionUIRunning(isRunning){
@@ -3401,8 +3562,82 @@ function wire(){
   $("#clientSearch").addEventListener("input", renderClients);
 
   $("#btnSettings").addEventListener("click", openSettings);
-  $("#btnSync").addEventListener("click", syncNow);
-  $("#btnSheetPull")?.addEventListener("click", syncFromSheet);
+  $("#btnSync").addEventListener("click", async () => {
+    if(!SETTINGS.syncEnabled || !SETTINGS.appsScriptUrl){
+      toast("Sync desactivado. Actívalo en Ajustes.");
+      updateSyncUI();
+      return;
+    }
+    const btn = $("#btnSync");
+    btn.disabled = true;
+    try{
+      await syncNow();
+      toast("Pestaña actual sincronizada.");
+    }catch(err){
+      console.warn("[SheetSync] pushTab error", err);
+      toast(err?.message || "No pude sincronizar la pestaña actual.");
+    }finally{
+      btn.disabled = false;
+      updateSyncUI();
+    }
+  });
+  $("#btnSheetPull")?.addEventListener("click", async () => {
+    if(!SETTINGS.appsScriptUrl){
+      toast("Falta la URL del Apps Script en Ajustes.");
+      updateSyncUI();
+      return;
+    }
+    const btn = $("#btnSheetPull");
+    btn.disabled = true;
+    try{
+      await syncFromSheet();
+      toast("Pestaña actual actualizada desde Sheets.");
+    }catch(err){
+      console.warn("[SheetSync] pullTab error", err);
+      toast(err?.message || "No pude traer la pestaña actual.");
+    }finally{
+      btn.disabled = false;
+      updateSyncUI();
+    }
+  });
+  $("#btnSyncAll")?.addEventListener("click", async () => {
+    if(!SETTINGS.syncEnabled || !SETTINGS.appsScriptUrl){
+      toast("Sync desactivado. Actívalo en Ajustes.");
+      updateSyncUI();
+      return;
+    }
+    const btn = $("#btnSyncAll");
+    btn.disabled = true;
+    try{
+      await pushAllTabsToSheet();
+      toast("Todas las pestañas sincronizadas.");
+    }catch(err){
+      console.warn("[SheetSync] pushAll error", err);
+      toast(err?.message || "No pude sincronizar todas las pestañas.");
+    }finally{
+      btn.disabled = false;
+      updateSyncUI();
+    }
+  });
+  $("#btnSheetPullAll")?.addEventListener("click", async () => {
+    if(!SETTINGS.appsScriptUrl){
+      toast("Falta la URL del Apps Script en Ajustes.");
+      updateSyncUI();
+      return;
+    }
+    const btn = $("#btnSheetPullAll");
+    btn.disabled = true;
+    try{
+      await pullAllTabsFromSheet();
+      toast("Todas las pestañas actualizadas desde Sheets.");
+    }catch(err){
+      console.warn("[SheetSync] pullAll error", err);
+      toast(err?.message || "No pude traer todas las pestañas.");
+    }finally{
+      btn.disabled = false;
+      updateSyncUI();
+    }
+  });
 
   $("#modalClose").addEventListener("click", closeModal);
   $("#modalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="modalOverlay") closeModal(); });
@@ -4208,7 +4443,8 @@ function openSettings(){
       format: "fergis_assistant_backup_v1",
       exportedAt: nowISO(),
       state: STATE,
-      settings: SETTINGS
+      settings: SETTINGS,
+      syncMeta: SYNC_META
     };
     const blob = new Blob([JSON.stringify(backup, null, 2)], { type:"application/json" });
     const url = URL.createObjectURL(blob);
@@ -4231,11 +4467,16 @@ function openSettings(){
 
       const nextState = hasBundle ? parsed.state : parsed;
       const nextSettings = hasBundle ? { ...DEFAULT_SETTINGS, ...(parsed.settings || {}) } : null;
+      const nextSyncMeta = hasBundle && parsed.syncMeta && typeof parsed.syncMeta === "object" ? parsed.syncMeta : null;
 
       STATE = normalizeState_(nextState);
       if(nextSettings){
         SETTINGS = nextSettings;
         saveSettings();
+      }
+      if(nextSyncMeta){
+        SYNC_META = nextSyncMeta;
+        saveSyncMeta();
       }
       saveState();
       toast("Importado.");
