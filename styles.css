@@ -295,6 +295,11 @@ body{
 .sessGrid{display:flex; flex-direction:column; gap: 14px;}
 .sessTextarea{min-height: 200px; resize: vertical;}
 .sessActions{display:flex; gap:10px; flex-wrap:wrap;}
+.sessHistoryViewer{max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:10px; padding-right:4px;}
+.sessHistoryCard{border:1px solid var(--line); border-radius:12px; padding:10px; background:rgba(255,255,255,.02);}
+.sessHistoryHead{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;}
+.sessHistoryBody{display:flex; flex-direction:column; gap:10px; font-size:13px; line-height:1.45;}
+
 .modalHead{
   display:flex;align-items:center;justify-content:space-between;
   padding:12px;

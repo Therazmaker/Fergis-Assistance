@@ -560,6 +560,7 @@ function normalizeState_(st){
     if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
     c.paidSolesManual = amountNum(c.paidSolesManual);
     c.paidDolaresManual = amountNum(c.paidDolaresManual);
+    c.sessionInsights = Array.isArray(c.sessionInsights) ? c.sessionInsights : [];
   }
 
 
@@ -1261,6 +1262,7 @@ function addClient(obj){
     zodiac: obj.zodiac || "",
     paidSolesManual: amountNum(obj.paidSolesManual),
     paidDolaresManual: amountNum(obj.paidDolaresManual),
+    sessionInsights: Array.isArray(obj.sessionInsights) ? obj.sessionInsights : [],
     createdAt: nowISO()
   };
   STATE.clients.unshift(c);
@@ -4055,6 +4057,61 @@ function upsertBookingRecord_(bookingId, record){
   updateSyncUI();
 }
 
+function upsertClientSessionInsight_(booking, record){
+  if(!booking || !record) return;
+  let client = booking.clientId ? STATE.clients.find(x => String(x.id) === String(booking.clientId)) : null;
+  if(!client && booking.client){
+    client = findClientByBookingClientString(booking.client);
+  }
+  if(!client) return;
+
+  const notes = (record.sessionNotes || "").trim();
+  const recommendations = (record.recommendations || "").trim();
+  if(!notes && !recommendations) return;
+
+  client.sessionInsights = Array.isArray(client.sessionInsights) ? client.sessionInsights : [];
+  const insight = {
+    id: uid("sins"),
+    bookingId: booking.id,
+    occStartAt: record.occStartAt || booking.startAt || nowISO(),
+    sessionNotes: notes,
+    recommendations,
+    createdAt: nowISO(),
+    sessionType: booking.type || "tarot"
+  };
+
+  const existingIdx = client.sessionInsights.findIndex(x => x.bookingId === insight.bookingId && x.occStartAt === insight.occStartAt);
+  if(existingIdx >= 0){
+    client.sessionInsights[existingIdx] = { ...client.sessionInsights[existingIdx], ...insight, id: client.sessionInsights[existingIdx].id || insight.id };
+  }else{
+    client.sessionInsights.push(insight);
+  }
+
+  client.sessionInsights.sort((a,b) => new Date(b.occStartAt || b.createdAt || 0) - new Date(a.occStartAt || a.createdAt || 0));
+}
+
+function renderSessionInsightCards_(client){
+  const items = Array.isArray(client?.sessionInsights) ? [...client.sessionInsights] : [];
+  items.sort((a,b) => new Date(b.occStartAt || b.createdAt || 0) - new Date(a.occStartAt || a.createdAt || 0));
+  if(!items.length){
+    return `<div class="itemMeta">Aún no hay recomendaciones previas guardadas para este cliente.</div>`;
+  }
+  return items.map((ins, idx) => {
+    const [lbl, cls] = bookingTypeLabel(ins.sessionType || "tarot");
+    const when = formatDateTimeDMYHM(ins.occStartAt || ins.createdAt || "") || "Fecha no disponible";
+    return `<article class="sessHistoryCard">
+      <div class="sessHistoryHead">
+        <div class="itemMeta">Sesión ${items.length - idx} · ${escapeHtml(when)}</div>
+        <span class="badge ${cls}">${lbl}</span>
+      </div>
+      <div class="sessHistoryBody">
+        ${ins.recommendations ? `<div><div class="itemMeta">Recomendaciones</div><div>${escapeHtml(ins.recommendations).replace(/\n/g, "<br>")}</div></div>` : ""}
+        ${ins.sessionNotes ? `<div><div class="itemMeta">Notas previas</div><div>${escapeHtml(ins.sessionNotes).replace(/\n/g, "<br>")}</div></div>` : ""}
+      </div>
+    </article>`;
+  }).join("");
+}
+
 function openClientSessionModal(bookingId, occStartAt=null){
   const b = STATE.bookings.find(x=>x.id===bookingId);
   if(!b){ toast("No encuentro esa sesión."); return; }
@@ -4079,6 +4136,7 @@ function openClientSessionModal(bookingId, occStartAt=null){
   const phone = c?.phone || snap.phone || "";
   const displayName = info.display || snap.name || (clientStr || "(sin cliente)");
   const handleShow = info.handleShow || snap.handle || (clientStr||"");
+  const historyCards = c ? renderSessionInsightCards_(c) : `<div class="itemMeta">Vincula esta sesión a un cliente para ver historial de recomendaciones.</div>`;
   const headerPills = [
     sessionDate ? `<span class="pill">📅 ${escapeHtml(sessionDate)}</span>` : "",
     sessionTime ? `<span class="pill">🕘 Sesión ${escapeHtml(sessionTime)}</span>` : "",
@@ -4123,7 +4181,12 @@ function openClientSessionModal(bookingId, occStartAt=null){
         <div class="row">
           <label class="label">Recomendaciones</label>
           <textarea id="mSessRecs" class="input sessTextarea" placeholder="Recomendaciones prácticas, rituales, hábitos, próximos pasos...">${escapeHtml(rec.recommendations||"")}</textarea>
-          <div class="itemMeta">Esto queda guardado dentro de la sesión (log) para revisarlo después.</div>
+          <div class="itemMeta">Al guardar, estas notas quedan en la sesión y también en el perfil del cliente.</div>
+        </div>
+
+        <div class="row">
+          <label class="label">Recomendaciones anteriores (solo lectura)</label>
+          <div class="sessHistoryViewer">${historyCards}</div>
         </div>
       </div>
 
@@ -4182,6 +4245,7 @@ function openClientSessionModal(bookingId, occStartAt=null){
     rec.sessionNotes = $("#mSessNotes").value || "";
     rec.recommendations = $("#mSessRecs").value || "";
     upsertBookingRecord_(b.id, rec);
+    upsertClientSessionInsight_(b, rec);
     if(markDone){
       updateBooking(b.id, { ...b, status:"done" });
     }else{
