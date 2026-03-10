@@ -313,6 +313,8 @@ body{
 .sessHistoryViewer{max-height:260px; overflow:auto; display:flex; flex-direction:column; gap:10px; padding-right:4px;}
 .sessHistoryCard{border:1px solid var(--line); border-radius:12px; padding:10px; background:rgba(255,255,255,.02);}
 .sessHistoryHead{display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;}
+.sessHistoryHeadMeta{display:flex; flex-direction:column; gap:6px; min-width:0;}
+.btn.tiny{padding:4px 8px; font-size:12px; line-height:1;}
 .sessHistoryBody{display:flex; flex-direction:column; gap:10px; font-size:13px; line-height:1.45;}
 
 .modalHead{

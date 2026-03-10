@@ -4139,8 +4139,11 @@ function renderSessionInsightCards_(client){
     const when = formatDateTimeDMYHM(ins.occStartAt || ins.createdAt || "") || "Fecha no disponible";
     return `<article class="sessHistoryCard">
       <div class="sessHistoryHead">
-        <div class="itemMeta">Sesión ${items.length - idx} · ${escapeHtml(when)}</div>
-        <span class="badge ${cls}">${lbl}</span>
+        <div class="sessHistoryHeadMeta">
+          <div class="itemMeta">Sesión ${items.length - idx} · ${escapeHtml(when)}</div>
+          <span class="badge ${cls}">${lbl}</span>
+        </div>
+        <button class="btn ghost tiny" data-act="deleteInsight" data-insight-id="${escapeHtml(ins.id || "")}" data-booking-id="${escapeHtml(ins.bookingId || "")}" data-occ="${escapeHtml(ins.occStartAt || "")}" title="Borrar esta recomendación">🗑️</button>
       </div>
       <div class="sessHistoryBody">
         ${ins.recommendations ? `<div><div class="itemMeta">Recomendaciones</div><div>${escapeHtml(ins.recommendations).replace(/\n/g, "<br>")}</div></div>` : ""}
@@ -4306,6 +4309,57 @@ function openClientSessionModal(bookingId, occStartAt=null){
       toast("No encontré un registro para borrar.");
     }
   };
+
+  const historyViewerEl = $(".sessHistoryViewer");
+  if(historyViewerEl){
+    historyViewerEl.addEventListener("click", (e)=>{
+      const btn = e.target.closest("button[data-act='deleteInsight']");
+      if(!btn || !c) return;
+
+      const insightId = btn.dataset.insightId || "";
+      const insightBookingId = btn.dataset.bookingId || "";
+      const insightOcc = btn.dataset.occ || "";
+      const insight = (Array.isArray(c.sessionInsights) ? c.sessionInsights : []).find(x => {
+        if(insightId && x.id === insightId) return true;
+        return (!!insightOcc && x.occStartAt === insightOcc && x.bookingId === insightBookingId);
+      });
+      if(!insight){ toast("No encontré esa recomendación."); return; }
+
+      if(!window.confirm("¿Quieres borrar esta recomendación guardada?")) return;
+
+      const ownerBooking = STATE.bookings.find(x => x.id === insight.bookingId) || null;
+      const recordLike = { id: insight.id || null, occStartAt: insight.occStartAt || null };
+      let removedRecord = false;
+      if(ownerBooking){
+        removedRecord = deleteBookingRecord_(ownerBooking.id, recordLike);
+      }
+
+      const before = Array.isArray(c.sessionInsights) ? c.sessionInsights.length : 0;
+      c.sessionInsights = (Array.isArray(c.sessionInsights) ? c.sessionInsights : []).filter(x => {
+        if(insight.id && x.id === insight.id) return false;
+        const sameBooking = x.bookingId === insight.bookingId;
+        const sameOcc = insight.occStartAt && x.occStartAt === insight.occStartAt;
+        return !(sameBooking && sameOcc);
+      });
+      const removedInsight = c.sessionInsights.length !== before;
+
+      if(removedInsight && !removedRecord){
+        saveState();
+        renderBookings();
+        renderCalendar();
+        updateSyncUI();
+      }
+
+      if(!removedInsight && !removedRecord){
+        toast("No encontré un registro para borrar.");
+        return;
+      }
+
+      closeModal();
+      openClientSessionModal(b.id, occIso);
+      toast("Recomendación borrada.");
+    });
+  }
 
   function saveOnly(markDone=false){
     rec.sessionNotes = $("#mSessNotes").value || "";
