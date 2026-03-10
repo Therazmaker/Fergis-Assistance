@@ -1575,11 +1575,20 @@ async function sheetSyncGet_(action, tabId=""){
 }
 
 async function sheetSyncPost_(body){
-  const res = await fetch(String(SETTINGS.appsScriptUrl || "").trim(), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
+  const url = String(SETTINGS.appsScriptUrl || "").trim();
+  let res;
+  try{
+    // NOTE: usamos text/plain para evitar preflight CORS en Apps Script Web Apps.
+    // Apps Script sigue recibiendo el payload en e.postData.contents.
+    res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(body)
+    });
+  }catch(err){
+    const reason = err?.message ? ` ${err.message}` : "";
+    throw new Error(`No se pudo conectar con Apps Script. Revisa que la URL sea /exec y esté desplegada para "Anyone".${reason}`);
+  }
   const text = await res.text();
   if(!text) return { ok: true };
   try{ return JSON.parse(text); }catch(_e){ return { ok: true, raw: text }; }
