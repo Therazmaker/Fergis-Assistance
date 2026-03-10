@@ -1335,6 +1335,116 @@ async function syncNow(){
   }
 }
 
+function buildAppsScriptUrl_(params={}){
+  const base = String(SETTINGS.appsScriptUrl || "").trim();
+  if(!base) return "";
+  const url = new URL(base, window.location.href);
+  Object.entries(params || {}).forEach(([k,v]) => {
+    if(v == null || v === "") return;
+    url.searchParams.set(k, String(v));
+  });
+  return url.toString();
+}
+
+function loadJsonp_(url, timeoutMs=15000){
+  return new Promise((resolve, reject) => {
+    const cbName = `faJsonp_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    let settled = false;
+
+    const cleanup = () => {
+      try{ delete window[cbName]; }catch(_e){ window[cbName] = undefined; }
+      script.remove();
+    };
+
+    const timer = window.setTimeout(() => {
+      if(settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error("Tiempo de espera agotado al leer desde Google Sheets"));
+    }, timeoutMs);
+
+    window[cbName] = (data) => {
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      if(settled) return;
+      settled = true;
+      clearTimeout(timer);
+      cleanup();
+      reject(new Error("No pude cargar el export desde Apps Script"));
+    };
+
+    script.src = `${url}${url.includes("?") ? "&" : "?"}callback=${encodeURIComponent(cbName)}`;
+    document.head.appendChild(script);
+  });
+}
+
+function applySheetStateSnapshot_(sheetState){
+  const incoming = normalizeState_(sheetState || {});
+  const nextState = normalizeState_({
+    ...STATE,
+    tasks: Array.isArray(incoming.tasks) ? incoming.tasks : STATE.tasks,
+    sessions: Array.isArray(incoming.sessions) ? incoming.sessions : STATE.sessions,
+    clients: Array.isArray(incoming.clients) ? incoming.clients : STATE.clients,
+    nextSteps: Array.isArray(incoming.nextSteps) ? incoming.nextSteps : STATE.nextSteps,
+    ideas: Array.isArray(incoming.ideas) ? incoming.ideas : STATE.ideas,
+    reminders: Array.isArray(incoming.reminders) ? incoming.reminders : STATE.reminders,
+    bookings: Array.isArray(incoming.bookings) ? incoming.bookings : STATE.bookings,
+    subscriptions: incoming.subscriptions || STATE.subscriptions,
+    oneToOneSessions: incoming.oneToOneSessions || STATE.oneToOneSessions,
+    questionReadings: incoming.questionReadings || STATE.questionReadings,
+    eventQueue: Array.isArray(STATE.eventQueue) ? STATE.eventQueue : [],
+    updatedAtMs: Date.now()
+  });
+
+  STATE = nextState;
+  saveState();
+  render();
+}
+
+async function syncFromSheet(){
+  const statusEl = document.querySelector("#syncStatus");
+  const btn = document.querySelector("#btnSheetPull");
+
+  if(!SETTINGS.appsScriptUrl){
+    statusEl.textContent = "Sync: desactivado";
+    toast("Falta la URL del Apps Script en Ajustes.");
+    return;
+  }
+
+  btn.disabled = true;
+  statusEl.textContent = "Sync: leyendo desde Sheet…";
+
+  try{
+    const url = buildAppsScriptUrl_({
+      action: "export",
+      apiKey: SETTINGS.apiKey || "",
+      app: "FergisAssistant"
+    });
+
+    const res = await loadJsonp_(url, 20000);
+    if(!res || res.ok !== true){
+      throw new Error(res?.error || "Apps Script devolvió una respuesta inválida");
+    }
+
+    applySheetStateSnapshot_(res.state || {});
+    statusEl.textContent = "Sync: bajado desde Sheet ✅";
+    toast("Datos del Sheet importados al asistente.");
+  }catch(err){
+    console.warn("Sheet import error", err);
+    statusEl.textContent = "Sync: error al leer Sheet ⚠";
+    toast(err?.message || "No pude traer los datos desde Google Sheets.");
+  }finally{
+    btn.disabled = false;
+  }
+}
+
 
 // ---------- UI ----------
 STATE = normalizeState_(loadState());
@@ -3238,6 +3348,7 @@ function wire(){
 
   $("#btnSettings").addEventListener("click", openSettings);
   $("#btnSync").addEventListener("click", syncNow);
+  $("#btnSheetPull")?.addEventListener("click", syncFromSheet);
 
   $("#modalClose").addEventListener("click", closeModal);
   $("#modalOverlay").addEventListener("click", (e)=>{ if(e.target.id==="modalOverlay") closeModal(); });
@@ -3994,7 +4105,7 @@ function openSettings(){
       <div class="row">
         <label class="label">Apps Script URL (exec)</label>
         <input id="mScriptUrl" class="input" value="${escapeHtml(SETTINGS.appsScriptUrl||"")}" placeholder="https://script.google.com/macros/s/XXXX/exec" />
-        <div class="itemMeta">Debe aceptar POST JSON y devolver { ok:true, acked:[...] }.</div>
+        <div class="itemMeta">Para enviar usa POST JSON. Para traer datos al asistente, el mismo endpoint debe aceptar ?action=export y devolver JSON/JSONP.</div>
       </div>
 
       <div class="row">
