@@ -2747,14 +2747,16 @@ function renderArchiveBookings(){
     const when = dt.toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
     const [lbl, cls] = bookingTypeLabel(b.type);
     const info = getClientForBooking_(b);
+    const clientName = info.display || b.client || "(sin cliente)";
+    const sessionTitle = b.title || lbl;
     const amountPen = b.amount ? ` • S/ ${b.amount}` : "";
     const amountUsd = b.amountUsd ? ` • $ ${b.amountUsd}` : "";
     const statusBadge = b.status === "done" ? ["Hecha","ok"] : ["Cancelada","warn"];
     return `<div class="item">
       <div class="itemLeft">
         <div>
-          <div class="itemTitle">${escapeHtml(b.title || lbl)}</div>
-          <div class="itemMeta">${escapeHtml(when)} • ${escapeHtml(info.display || b.client || "(sin cliente)")}${amountPen}${amountUsd}</div>
+          <div class="itemTitle">${escapeHtml(clientName)}</div>
+          <div class="itemMeta">${escapeHtml(when)} • ${escapeHtml(sessionTitle)}${amountPen}${amountUsd}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
