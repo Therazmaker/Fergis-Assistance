@@ -4057,6 +4057,27 @@ function upsertBookingRecord_(bookingId, record){
   updateSyncUI();
 }
 
+function deleteBookingRecord_(bookingId, record){
+  const b = STATE.bookings.find(x=>x.id===bookingId);
+  if(!b) return false;
+
+  const before = Array.isArray(b.sessionRecords) ? b.sessionRecords.length : 0;
+  b.sessionRecords = (Array.isArray(b.sessionRecords) ? b.sessionRecords : []).filter(r => {
+    const sameId = record?.id && r.id === record.id;
+    const sameOcc = record?.occStartAt && r.occStartAt === record.occStartAt;
+    return !(sameId || sameOcc);
+  });
+
+  if(b.sessionRecords.length === before) return false;
+
+  enqueueEvent("booking_session_record_delete", { bookingId, recordId: record?.id || null, occStartAt: record?.occStartAt || null });
+  saveState();
+  renderBookings();
+  renderCalendar();
+  updateSyncUI();
+  return true;
+}
+
 function upsertClientSessionInsight_(booking, record){
   if(!booking || !record) return;
   let client = booking.clientId ? STATE.clients.find(x => String(x.id) === String(booking.clientId)) : null;
@@ -4088,6 +4109,23 @@ function upsertClientSessionInsight_(booking, record){
   }
 
   client.sessionInsights.sort((a,b) => new Date(b.occStartAt || b.createdAt || 0) - new Date(a.occStartAt || a.createdAt || 0));
+}
+
+function deleteClientSessionInsight_(booking, record){
+  if(!booking || !record) return false;
+  let client = booking.clientId ? STATE.clients.find(x => String(x.id) === String(booking.clientId)) : null;
+  if(!client && booking.client){
+    client = findClientByBookingClientString(booking.client);
+  }
+  if(!client) return false;
+
+  const before = Array.isArray(client.sessionInsights) ? client.sessionInsights.length : 0;
+  client.sessionInsights = (Array.isArray(client.sessionInsights) ? client.sessionInsights : []).filter(x => {
+    const sameBooking = x.bookingId === booking.id;
+    const sameOcc = record.occStartAt && x.occStartAt === record.occStartAt;
+    return !(sameBooking && sameOcc);
+  });
+  return client.sessionInsights.length !== before;
 }
 
 function renderSessionInsightCards_(client){
@@ -4197,6 +4235,7 @@ function openClientSessionModal(bookingId, occStartAt=null){
         <div class="sessActions">
           <button class="btn" id="mSessEditClient" ${c? "" : "disabled"}>Editar perfil</button>
           <button class="btn" id="mSessCopy" title="Copiar resumen">📋 Copiar</button>
+          <button class="btn warn" id="mSessDelete">🗑️ Borrar registro</button>
         </div>
         ${c ? "" : `<div class="itemMeta">Tip: para ver fecha de nacimiento y signo aquí, crea el cliente en CRM y usa el mismo handle.</div>`}
       </div>
@@ -4238,6 +4277,33 @@ function openClientSessionModal(bookingId, occStartAt=null){
       toast("Copiado ✨");
     }catch(e){
       toast("No pude copiar (permiso del navegador).");
+    }
+  };
+
+  $("#mSessDelete").onclick = ()=>{
+    const hasContent = (($("#mSessNotes").value || "").trim() || ($("#mSessRecs").value || "").trim());
+    const hasLogRecord = recs.some(r => (rec.id && r.id === rec.id) || (rec.occStartAt && r.occStartAt === rec.occStartAt));
+    if(!hasContent && !hasLogRecord){
+      toast("No hay registro guardado para borrar.");
+      return;
+    }
+
+    if(!window.confirm("¿Seguro que quieres borrar este registro de sesión? Esta acción no se puede deshacer.")) return;
+
+    const removedRecord = deleteBookingRecord_(b.id, rec);
+    const removedInsight = deleteClientSessionInsight_(b, rec);
+    if(removedInsight && !removedRecord){
+      saveState();
+      renderBookings();
+      renderCalendar();
+      updateSyncUI();
+    }
+
+    if(removedRecord || removedInsight){
+      closeModal();
+      toast("Registro de sesión borrado.");
+    }else{
+      toast("No encontré un registro para borrar.");
     }
   };
 
