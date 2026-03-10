@@ -203,7 +203,10 @@ const CONTENT_SECTIONS = [
   ["stories", "🌻 Stories"],
   ["entreDiosas", "🌻 Entre Diosas"],
   ["threads", "🌻 Threads"],
-  ["postVideo", "🌻 Post / Video"]
+  ["postVideo", "🌻 Post / Video"],
+  ["pinterest", "🌻 Pinterest"],
+  ["youtube", "🌻 YouTube"],
+  ["youtubeShort", "🌻 YouTube Short"]
 ];
 
 const APP_TABS = ["plan","contenido","investigacion","clientes","sesiones11","suscripcion","lecturasPreguntas","finanzas","archivo"];
@@ -243,7 +246,15 @@ function formatContentDateLabel(dayKey){
 }
 
 function defaultContentSections(){
-  return { stories: [], entreDiosas: [], threads: [], postVideo: [] };
+  return {
+    stories: [],
+    entreDiosas: [],
+    threads: [],
+    postVideo: [],
+    pinterest: [],
+    youtube: [],
+    youtubeShort: []
+  };
 }
 
 function ensureContentDay(dayKey){
