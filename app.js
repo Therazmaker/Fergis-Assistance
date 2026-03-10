@@ -1301,31 +1301,34 @@ async function syncNow(){
   }
 
   const pending = STATE.eventQueue.filter(e => !e.syncedAt);
-  if(!pending.length){
-    statusEl.textContent = "Sync: al día ✅";
-    toast("Nada nuevo para sincronizar.");
-    return;
-  }
+  const snapshotEvent = {
+    id: uid("evt"),
+    type: "state_snapshot",
+    payload: buildStateSnapshotPayload_(),
+    ts: nowISO(),
+    syncedAt: null
+  };
+  const outbound = [...pending, snapshotEvent];
 
   btn.disabled = true;
-  statusEl.textContent = `Sync: enviando ${pending.length}…`;
+  statusEl.textContent = `Sync: enviando ${outbound.length}…`;
 
   try{
     await fetch(SETTINGS.appsScriptUrl, {
       method: "POST",
-      mode: "no-cors",             // ✅ evita CORS
-      body: JSON.stringify({       // ✅ sin headers = no preflight
+      mode: "no-cors",
+      body: JSON.stringify({
         app: "FergisAssistant",
         v: "0.1",
         apiKey: SETTINGS.apiKey || "",
         deviceTs: nowISO(),
-        events: pending
+        events: outbound
       })
     });
 
-    // OJO: con no-cors no podemos leer respuesta (opaque)
-    statusEl.textContent = "Sync: enviado ✅ (verificar en Sheet)";
-    toast("Enviado. Revisa 'Sync_Audit' y 'Events_Raw'.");
+    markEventsSynced(pending.map(e => e.id));
+    statusEl.textContent = "Sync: enviado ✅ (snapshot incluido)";
+    toast(`Enviado a Sheet. Snapshot + ${pending.length} cambios.`);
   }catch(err){
     console.warn("Sync error", err);
     statusEl.textContent = "Sync: error ⚠";
@@ -1385,10 +1388,56 @@ function loadJsonp_(url, timeoutMs=15000){
   });
 }
 
+function stripLargeDataForSync_(value, depth=0){
+  if(depth > 12) return null;
+  if(value == null) return value;
+  if(typeof value === "string"){
+    const looksBinary = value.startsWith("data:") || value.length > 12000;
+    return looksBinary ? "" : value;
+  }
+  if(Array.isArray(value)) return value.map(v => stripLargeDataForSync_(v, depth+1));
+  if(typeof value === "object"){
+    const out = {};
+    for(const [k,v] of Object.entries(value)){
+      if(k === "eventQueue") continue;
+      out[k] = stripLargeDataForSync_(v, depth+1);
+    }
+    return out;
+  }
+  return value;
+}
+
+function buildStateSnapshotPayload_(){
+  const base = normalizeState_(JSON.parse(JSON.stringify(STATE || {})));
+  const snapshot = {
+    v: base.v || "0.1",
+    createdAt: base.createdAt || nowISO(),
+    updatedAtMs: Date.now(),
+    activeTab: base.activeTab || "plan",
+    planWeekId: base.planWeekId || null,
+    calMonth: base.calMonth || monthKey(),
+    financeRange: base.financeRange || "1M",
+    tasks: base.tasks || [],
+    sessions: base.sessions || [],
+    bookings: base.bookings || [],
+    reminders: base.reminders || [],
+    clients: base.clients || [],
+    nextSteps: base.nextSteps || [],
+    ideas: base.ideas || [],
+    contentTodo: base.contentTodo || { activeDate: todayKey(), days: {}, historyOrder: [] },
+    subscriptions: base.subscriptions || { viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth()+1, entries: [] },
+    oneToOneSessions: base.oneToOneSessions || { viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth()+1, entries: [] },
+    questionReadings: base.questionReadings || { viewYear: new Date().getFullYear(), viewMonth: new Date().getMonth()+1, entries: [] }
+  };
+  return stripLargeDataForSync_(snapshot);
+}
+
 function applySheetStateSnapshot_(sheetState){
   const incoming = normalizeState_(sheetState || {});
   const nextState = normalizeState_({
     ...STATE,
+    v: incoming.v || STATE.v,
+    createdAt: incoming.createdAt || STATE.createdAt,
     tasks: Array.isArray(incoming.tasks) ? incoming.tasks : STATE.tasks,
     sessions: Array.isArray(incoming.sessions) ? incoming.sessions : STATE.sessions,
     clients: Array.isArray(incoming.clients) ? incoming.clients : STATE.clients,
@@ -1396,11 +1445,16 @@ function applySheetStateSnapshot_(sheetState){
     ideas: Array.isArray(incoming.ideas) ? incoming.ideas : STATE.ideas,
     reminders: Array.isArray(incoming.reminders) ? incoming.reminders : STATE.reminders,
     bookings: Array.isArray(incoming.bookings) ? incoming.bookings : STATE.bookings,
+    contentTodo: incoming.contentTodo || STATE.contentTodo,
+    activeTab: incoming.activeTab || STATE.activeTab,
+    planWeekId: incoming.planWeekId ?? STATE.planWeekId,
+    calMonth: incoming.calMonth || STATE.calMonth,
+    financeRange: incoming.financeRange || STATE.financeRange,
     subscriptions: incoming.subscriptions || STATE.subscriptions,
     oneToOneSessions: incoming.oneToOneSessions || STATE.oneToOneSessions,
     questionReadings: incoming.questionReadings || STATE.questionReadings,
     eventQueue: Array.isArray(STATE.eventQueue) ? STATE.eventQueue : [],
-    updatedAtMs: Date.now()
+    updatedAtMs: Math.max(Number(incoming.updatedAtMs || 0), Date.now())
   });
 
   STATE = nextState;
