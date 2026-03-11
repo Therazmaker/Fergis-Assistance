@@ -212,9 +212,9 @@ select.input optgroup{
 
 .calHeadActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
-.calendar{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:10px}
+.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
 .calDow{font-size:12px;opacity:.7;text-align:center;padding:6px 0}
-.calCell{border:1px solid rgba(255,255,255,.10);border-radius:14px;min-height:78px;padding:10px;position:relative;cursor:pointer;background:rgba(255,255,255,.02)}
+.calCell{border:1px solid rgba(255,255,255,.10);border-radius:14px;min-height:78px;min-width:0;padding:10px;position:relative;cursor:pointer;background:rgba(255,255,255,.02)}
 .calCell:hover{background:rgba(255,255,255,.04)}
 .calCell.muted{opacity:.45}
 .calNum{font-weight:700;font-size:12px;opacity:.9}
