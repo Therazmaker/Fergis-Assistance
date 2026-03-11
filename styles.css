@@ -198,6 +198,14 @@ body{
 .label{font-size:12px;color:var(--muted)}
 .row{display:flex;flex-direction:column;gap:6px;margin-top:10px}
 
+/* Native select dropdowns can render a light menu panel on some browsers/OS.
+   Force a dark text color for <option> items so they remain readable. */
+select.input option,
+select.input optgroup{
+  color:#111827;
+  background:#f8fafc;
+}
+
 .filters{display:flex;gap:8px;margin-bottom:10px}
 .filters .input.small{flex:1}
 .filters select.input.small{flex:0 0 160px}
