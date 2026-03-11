@@ -2559,6 +2559,15 @@ function bookingDotClass(type){
   return "neutral";
 }
 
+function firstNameFromBooking_(booking){
+  const info = getClientForBooking_(booking);
+  const source = info.client?.name || info.display || "";
+  const cleaned = String(source).trim().replace(/^@/, "");
+  if(!cleaned) return "Cliente";
+  const first = cleaned.split(/\s+/).find(Boolean) || "";
+  return first || "Cliente";
+}
+
 function occurrencesInRange(rangeStart, rangeEnd){
   // Genera ocurrencias (incluye repetición semanal)
   const out = [];
@@ -2636,18 +2645,19 @@ function renderCalendar(){
     const k = dateKey(d);
     const inMonth = d.getMonth() === first.getMonth();
     const items = byDay.get(k) || [];
-    const dots = items.slice(0,3).map(o => {
+    const clients = items.slice(0,3).map(o => {
       const b = STATE.bookings.find(x=>x.id===o.bookingId);
       const cls = bookingDotClass(b?.type);
       const info = getClientForBooking_(b);
       const zcls = info.element ? `z-${info.element}` : "";
-      return `<span class="dot ${cls} ${zcls}" title="${escapeHtml(info.display || '')}"></span>`;
+      const firstName = firstNameFromBooking_(b);
+      return `<span class="calClientChip ${cls} ${zcls}" title="${escapeHtml(info.display || '')}">${escapeHtml(firstName)}</span>`;
     }).join("");
     const more = items.length > 3 ? `<span class="pill">+${items.length-3}</span>` : "";
     const cls = ["calCell", inMonth?"":"muted", (k===today)?"calToday":""].join(" ").trim();
     cells.push(`<div class="${cls}" data-act="calDay" data-day="${k}">
       <div class="calNum">${d.getDate()}</div>
-      <div class="calMeta">${dots}${more}</div>
+      <div class="calMeta">${clients}${more}</div>
     </div>`);
   }
   cal.innerHTML = dows + cells.join("");
