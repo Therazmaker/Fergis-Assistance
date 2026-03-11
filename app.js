@@ -556,6 +556,7 @@ function normalizeState_(st){
     if(!c.dob) c.dob = c.dob || "";           // YYYY-MM-DD
     if(!c.birthTime) c.birthTime = c.birthTime || "";
     if(!c.birthPlace) c.birthPlace = c.birthPlace || "";
+    if(!c.residencePlace) c.residencePlace = c.residencePlace || "";
     if(!c.phone) c.phone = c.phone || "";
     if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
     c.paidSolesManual = amountNum(c.paidSolesManual);
@@ -1258,6 +1259,7 @@ function addClient(obj){
     dob: obj.dob || "",
     birthTime: obj.birthTime || "",
     birthPlace: (obj.birthPlace || "").trim(),
+    residencePlace: (obj.residencePlace || "").trim(),
     phone: (obj.phone || "").trim(),
     zodiac: obj.zodiac || "",
     paidSolesManual: amountNum(obj.paidSolesManual),
@@ -1845,11 +1847,21 @@ function addSubscription(obj={}){
 }
 
 function openSubscriptionModal(){
+  const clientOptions = STATE.clients
+    .map(c => (c.name || c.handle || "").trim())
+    .filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b, "es", { sensitivity: "base" }));
+
   openModal(
     "Nuevo registro de suscripción",
     `<div class="row"><label class="label">Tipo</label><select id="mSubType" class="input">${SUBSCRIPTION_TYPES.map(t=>`<option value="${t.key}">${t.label}</option>`).join("")}</select></div>
     <div class="row"><label class="label">Fecha de pago</label><input id="mSubDate" type="date" class="input" value="${todayKey()}" /></div>
-    <div class="row"><label class="label">Nombre</label><input id="mSubName" class="input" placeholder="Nombre de cliente" /></div>
+    <div class="row"><label class="label">Nombre</label>
+      <select id="mSubName" class="input">
+        <option value="">Selecciona cliente</option>
+        ${clientOptions.map(name=>`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("")}
+      </select>
+    </div>
     <div class="row"><label class="label">Costo soles</label><input id="mSubSoles" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Costo dólares</label><input id="mSubDol" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Observaciones</label><input id="mSubObs" class="input" /></div>
@@ -3810,6 +3822,10 @@ function openClientModal(clientId=null){
         <input id="mCBirthPlace" class="input" value="${escapeHtml(c?.birthPlace||"")}" placeholder="Ej: Lima, Perú" />
       </div>
       <div class="row">
+        <label class="label">Lugar de residencia</label>
+        <input id="mCResidencePlace" class="input" value="${escapeHtml(c?.residencePlace||"")}" placeholder="Ej: Cusco, Perú" />
+      </div>
+      <div class="row">
         <label class="label">Teléfono</label>
         <input id="mCPhone" class="input" value="${escapeHtml(c?.phone||"")}" placeholder="Ej: +51 999 999 999" />
       </div>
@@ -3855,6 +3871,7 @@ function openClientModal(clientId=null){
       dob: $("#mCDob").value,
       birthTime: $("#mCBirthTime").value,
       birthPlace: $("#mCBirthPlace").value,
+      residencePlace: $("#mCResidencePlace").value,
       phone: $("#mCPhone").value,
       zodiac: $("#mCZodiac").value,
       paidSolesManual: amountNum($("#mCPaidSolesManual")?.value),
