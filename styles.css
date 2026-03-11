@@ -212,14 +212,14 @@ select.input optgroup{
 
 .calHeadActions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
-.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;margin-top:10px}
+.calendar{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin-top:10px}
 .calDow{font-size:12px;opacity:.7;text-align:center;padding:6px 0}
-.calCell{border:1px solid rgba(255,255,255,.10);border-radius:14px;min-height:78px;min-width:0;padding:8px;position:relative;cursor:pointer;background:rgba(255,255,255,.02)}
+.calCell{border:1px solid rgba(255,255,255,.10);border-radius:14px;min-height:78px;min-width:0;padding:10px;position:relative;cursor:pointer;background:rgba(255,255,255,.02)}
 .calCell:hover{background:rgba(255,255,255,.04)}
 .calCell.muted{opacity:.45}
 .calNum{font-weight:700;font-size:12px;opacity:.9}
-.calMeta{margin-top:6px;font-size:11px;opacity:.92;display:flex;gap:4px;flex-wrap:wrap;align-items:center}
-.calClientChip{max-width:100%;display:inline-flex;align-items:center;padding:1px 6px;border-radius:999px;font-size:10px;line-height:1.15;border:1px solid rgba(255,255,255,.12);background:rgba(255,214,102,.16);color:#ffe6a6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.calMeta{margin-top:8px;font-size:12px;opacity:.92;display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.calClientChip{max-width:100%;display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;line-height:1.2;border:1px solid rgba(255,255,255,.12);background:rgba(255,214,102,.16);color:#ffe6a6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .calClientChip.alt{background:rgba(124,255,178,.14);color:#b7ffd7}
 .calClientChip.neutral{background:rgba(163,198,255,.14);color:#d7e7ff}
 .dot{width:8px;height:8px;border-radius:999px;background:rgba(255,214,102,.9);display:inline-block}
