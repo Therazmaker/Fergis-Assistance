@@ -1977,10 +1977,20 @@ function addOneToOneSession(obj={}){
 }
 
 function openOneToOneSessionModal(){
+  const clientOptions = STATE.clients
+    .map(c => (c.name || c.handle || "").trim())
+    .filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b, "es", { sensitivity: "base" }));
+
   openModal(
     "Nueva sesión 1:1",
     `<div class="row"><label class="label">Fecha</label><input id="mS11Date" type="date" class="input" value="${todayKey()}" /></div>
-    <div class="row"><label class="label">Consultante</label><input id="mS11Consultant" class="input" /></div>
+    <div class="row"><label class="label">Consultante</label>
+      <select id="mS11Consultant" class="input">
+        <option value="">Selecciona cliente</option>
+        ${clientOptions.map(name=>`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("")}
+      </select>
+    </div>
     <div class="row"><label class="label">Contacto</label><input id="mS11Contact" class="input" /></div>
     <div class="row"><label class="label">Fecha de nacimiento</label><input id="mS11BirthDate" type="date" class="input" /></div>
     <div class="row"><label class="label">Tipo de sesión</label><input id="mS11SessionType" class="input" placeholder="Escribe libremente" /></div>
@@ -2100,10 +2110,20 @@ function addQuestionReading(obj={}){
 }
 
 function openQuestionReadingModal(){
+  const clientOptions = STATE.clients
+    .map(c => (c.name || c.handle || "").trim())
+    .filter(Boolean)
+    .sort((a,b)=>a.localeCompare(b, "es", { sensitivity: "base" }));
+
   openModal(
     "Nueva lectura por preguntas",
     `<div class="row"><label class="label">Fecha</label><input id="mQrDate" type="date" class="input" value="${todayKey()}" /></div>
-    <div class="row"><label class="label">Nombre de consultante</label><input id="mQrConsultant" class="input" /></div>
+    <div class="row"><label class="label">Nombre de consultante</label>
+      <select id="mQrConsultant" class="input">
+        <option value="">Selecciona cliente</option>
+        ${clientOptions.map(name=>`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("")}
+      </select>
+    </div>
     <div class="row"><label class="label">Fecha de nacimiento</label><input id="mQrBirthDate" type="date" class="input" /></div>
     <div class="row"><label class="label">Cantidad de preguntas</label><input id="mQrQuestionsCount" type="number" class="input" min="0" step="1" /></div>
     <div class="row"><label class="label">Costo en soles</label><input id="mQrCostSoles" type="number" class="input" min="0" step="0.01" /></div>
