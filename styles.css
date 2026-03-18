@@ -162,10 +162,25 @@ body {
   color: var(--terracota); letter-spacing: .18em;
   text-transform: uppercase;
 }
+/* Gold italic accent — wrap a word or line in <em class="gold"> inside heroTitle */
+.heroTitle .gold {
+  color: var(--girasol);
+  font-style: italic;
+}
+.heroCard.has-bg-image .heroTitle .gold {
+  color: #F4C430;
+  text-shadow: 0 1px 12px rgba(244,196,48,.4);
+}
 .heroTitle {
   font-family: var(--font-display);
   font-size: 30px; font-weight: 900; font-style: italic;
   color: var(--text); margin: 8px 0 10px; line-height: 1.15;
+  letter-spacing: -.02em;
+}
+/* When bg image is active, make the title pop like the reference — dark + bold */
+.heroCard.has-bg-image .heroTitle {
+  color: #2A1508;
+  text-shadow: 0 1px 8px rgba(254,250,244,.6);
 }
 .heroText { color: var(--muted); line-height: 1.55; font-size: 13.5px; }
 .heroRight {
@@ -630,6 +645,16 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
 .heroLeft, .heroRight {
   position: relative;
   z-index: 2;
+}
+
+/* When background image is active, give heroRight a solid card so it's always readable */
+.heroCard.has-bg-image .heroRight {
+  background: rgba(254,250,244,.94);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  border: 1px solid rgba(244,196,48,.25);
+  padding: 10px;
+  align-self: flex-start;
 }
 
 /* Image picker button — floats at bottom-left of hero */
