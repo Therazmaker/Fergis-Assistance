@@ -15,7 +15,8 @@ const DEFAULT_SETTINGS = {
   appsScriptUrl: "",        // ejemplo: https://script.google.com/macros/s/XXXX/exec
   apiKey: "",               // opcional (si lo quieres validar en Apps Script)
   exchangeRate: 3.75,       // tipo de cambio USD → PEN (soles)
-  heroBlur: 1.5             // blur del banner en px (0 = sin blur, 10 = máximo)
+  heroBlur: 1.5,            // blur del banner en px (0 = sin blur, 10 = máximo)
+  heroOverlay: 0.75         // opacidad del filtro blanco sobre la imagen (0 = sin filtro, 1 = blanco total)
 };
 
 // IMPORTANT:
@@ -4716,6 +4717,22 @@ function openSettings(){
         <div class="itemMeta" style="margin-top:4px">Controla el desenfoque de la imagen que pones en el hero.</div>
       </div>
 
+      <div class="row">
+        <label class="label">Opacidad del filtro blanco</label>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+          <span class="itemMeta" style="min-width:60px">Sin filtro</span>
+          <input type="range" id="mHeroOverlay" min="0" max="1" step="0.05"
+            value="${SETTINGS.heroOverlay ?? 0.75}"
+            style="flex:1;accent-color:#F4C430" />
+          <span class="itemMeta" style="min-width:60px">Total</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <span class="itemMeta">Filtro actual:</span>
+          <strong id="mHeroOverlayVal" style="font-size:13px;color:#3A2318">${Math.round((SETTINGS.heroOverlay ?? 0.75)*100)}%</strong>
+        </div>
+        <div class="itemMeta" style="margin-top:4px">A 0% la imagen se ve directa. Sube para que el texto quede más legible.</div>
+      </div>
+
       <div class="divider"></div>
 
       <div class="row">
@@ -4745,11 +4762,32 @@ function openSettings(){
   const blurSlider = $("#mHeroBlur");
   const blurVal = $("#mHeroBlurVal");
   const bgImgEl = document.getElementById("heroBgImage");
+  const bgOvlEl = document.getElementById("heroBgOverlay");
   if(blurSlider){
     blurSlider.addEventListener("input", () => {
       const v = parseFloat(blurSlider.value);
       blurVal.textContent = v + "px";
       if(bgImgEl) bgImgEl.style.filter = "blur(" + v + "px)";
+    });
+  }
+
+  // Live overlay preview
+  const ovlSlider = $("#mHeroOverlay");
+  const ovlVal = $("#mHeroOverlayVal");
+  function applyOverlayOpacity(opacity){
+    if(!bgOvlEl) return;
+    bgOvlEl.style.background =
+      "linear-gradient(to right," +
+      "rgba(254,250,244," + opacity + ") 0%," +
+      "rgba(254,250,244," + (opacity * 0.85) + ") 45%," +
+      "rgba(254,250,244," + (opacity * 0.95) + ") 65%," +
+      "rgba(254,250,244," + Math.min(opacity + 0.08, 1) + ") 100%)";
+  }
+  if(ovlSlider){
+    ovlSlider.addEventListener("input", () => {
+      const v = parseFloat(ovlSlider.value);
+      ovlVal.textContent = Math.round(v * 100) + "%";
+      applyOverlayOpacity(v);
     });
   }
 
@@ -4763,6 +4801,11 @@ function openSettings(){
     if(!isNaN(newBlur)) {
       SETTINGS.heroBlur = newBlur;
       if(bgImgEl) bgImgEl.style.filter = "blur(" + newBlur + "px)";
+    }
+    const newOverlay = parseFloat(ovlSlider ? ovlSlider.value : 0.75);
+    if(!isNaN(newOverlay)) {
+      SETTINGS.heroOverlay = newOverlay;
+      applyOverlayOpacity(newOverlay);
     }
     saveSettings();
     updateSyncUI();
@@ -4851,9 +4894,20 @@ window.addEventListener("pagehide", () => saveState());
     const blur = (SETTINGS && SETTINGS.heroBlur != null) ? SETTINGS.heroBlur : 1.5;
     bgImg.style.filter = 'blur(' + blur + 'px)';
   }
+  function applyOverlay(){
+    if(!bgOvl) return;
+    const opacity = (SETTINGS && SETTINGS.heroOverlay != null) ? SETTINGS.heroOverlay : 0.75;
+    bgOvl.style.background =
+      'linear-gradient(to right,' +
+      'rgba(254,250,244,' + opacity + ') 0%,' +
+      'rgba(254,250,244,' + (opacity * 0.85) + ') 45%,' +
+      'rgba(254,250,244,' + (opacity * 0.95) + ') 65%,' +
+      'rgba(254,250,244,' + Math.min(opacity + 0.08, 1) + ') 100%)';
+  }
   function showImage(src){
     bgImg.style.backgroundImage = 'url(' + src + ')';
     applyBlur();
+    applyOverlay();
     bgImg.classList.remove('hidden');
     bgOvl.classList.remove('hidden');
     heroCard.classList.add('has-bg-image');
