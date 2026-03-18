@@ -166,6 +166,28 @@ function formatDateTimeDMYHM(isoLike){
   return `${pad2(d.getDate())}-${pad2(d.getMonth()+1)}-${d.getFullYear()} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
+function getTodayBirthdays(st = STATE){
+  const clients = (st && Array.isArray(st.clients)) ? st.clients : [];
+  const now = new Date();
+  const todayMonth = now.getMonth() + 1;
+  const todayDay = now.getDate();
+
+  return clients
+    .filter((c) => {
+      if(!c?.dob) return false;
+      const parts = String(c.dob).split("-");
+      if(parts.length < 3) return false;
+      const month = Number(parts[1]);
+      const day = Number(parts[2]);
+      return month === todayMonth && day === todayDay;
+    })
+    .sort((a, b) => {
+      const an = `${a.name || ""} ${a.handle || ""}`.trim().toLowerCase();
+      const bn = `${b.name || ""} ${b.handle || ""}`.trim().toLowerCase();
+      return an.localeCompare(bn, "es");
+    });
+}
+
 // ---- Month helpers ----
 function monthKey(d=new Date()){
   const x = new Date(d);
@@ -822,6 +844,7 @@ function renderLevelDisplay(){
   const el = document.getElementById("heroLevelDisplay");
   if(!el) return;
   const p = getLevelProgress();
+  const birthdays = getTodayBirthdays();
   const levelNames = [
     "","Semilla","Germinando","Primer brote","Creciendo","Casi flor",
     "Abriendo","Girasol joven","Floreciendo","Radiante","Gloriosa","¡Girasol de luz! ✨"
@@ -830,25 +853,41 @@ function renderLevelDisplay(){
   const svg = getSunflowerSVG(p.level);
   const isMax = p.isMax;
 
+  const birthdayRows = birthdays.length
+    ? birthdays.map((c) => {
+        const safeName = escapeHtml(c.name || c.handle || "Cliente");
+        const handle = c.handle ? ` <span class="birthdayHandle">@${escapeHtml(String(c.handle).replace(/^@/, ""))}</span>` : "";
+        const zodiac = c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "");
+        const zodiacPill = zodiac ? `<span class="pill birthdayZodiac">♈ ${escapeHtml(zodiac)}</span>` : "";
+        return `<div class="birthdayRow">🎉 <strong>${safeName}</strong>${handle} ${zodiacPill}</div>`;
+      }).join("")
+    : `<div class="birthdayEmpty">No hay cumpleaños hoy.</div>`;
+
   el.innerHTML = `
-    <div class="level-display${isMax ? " max-level" : ""}">
-      <div class="level-svg-wrap${isMax ? " max-glow" : ""}">${svg}</div>
-      <div class="level-info">
-        <div class="level-header">
-          <span class="level-badge-num">${p.level}</span>
-          <span class="level-name">${name}</span>
-        </div>
-        ${isMax
-          ? `<div class="level-soles">S/ ${p.soles.toFixed(0)} este mes ✨</div>
-             <div class="level-max-text">¡Meta del mes alcanzada!</div>`
-          : `<div class="level-progress-wrap">
-               <div class="level-progress-bar">
-                 <div class="level-progress-fill" style="width:${p.progressPercent}%"></div>
+    <div class="heroMetricStack">
+      <div class="level-display${isMax ? " max-level" : ""}">
+        <div class="level-svg-wrap${isMax ? " max-glow" : ""}">${svg}</div>
+        <div class="level-info">
+          <div class="level-header">
+            <span class="level-badge-num">${p.level}</span>
+            <span class="level-name">${name}</span>
+          </div>
+          ${isMax
+            ? `<div class="level-soles">S/ ${p.soles.toFixed(0)} este mes ✨</div>
+               <div class="level-max-text">¡Meta del mes alcanzada!</div>`
+            : `<div class="level-progress-wrap">
+                 <div class="level-progress-bar">
+                   <div class="level-progress-fill" style="width:${p.progressPercent}%"></div>
+                 </div>
+                 <span class="level-progress-pct">${p.progressPercent}%</span>
                </div>
-               <span class="level-progress-pct">${p.progressPercent}%</span>
-             </div>
-             <div class="level-soles">S/ ${p.soles.toFixed(0)} · Faltan S/ ${p.solesLeft.toFixed(0)} para nivel ${p.level + 1}</div>`
-        }
+               <div class="level-soles">S/ ${p.soles.toFixed(0)} · Faltan S/ ${p.solesLeft.toFixed(0)} para nivel ${p.level + 1}</div>`
+          }
+        </div>
+      </div>
+      <div class="birthday-display">
+        <div class="birthdayTitle">🎂 Cumpleaños de hoy</div>
+        <div class="birthdayList">${birthdayRows}</div>
       </div>
     </div>`;
 }
@@ -1273,6 +1312,7 @@ function addClient(obj){
   renderClients();
   renderNextSteps();
   renderFinance();
+  renderMetrics();
 }
 function updateClient(id, patch){
   const c = STATE.clients.find(x => x.id === id);
@@ -1284,6 +1324,7 @@ function updateClient(id, patch){
   renderClients();
   renderNextSteps();
   renderFinance();
+  renderMetrics();
 }
 function deleteClient(id){
   STATE.clients = STATE.clients.filter(x => x.id !== id);
@@ -1293,6 +1334,7 @@ function deleteClient(id){
   renderClients();
   renderNextSteps();
   renderFinance();
+  renderMetrics();
 }
 
 function addNextStep(obj){

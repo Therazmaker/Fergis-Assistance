@@ -494,3 +494,45 @@ select.input optgroup{
   color: #f6c000;
   font-weight: 600;
 }
+.heroMetricStack{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  min-width:280px;
+}
+.birthday-display{
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 14px;
+  padding: 10px 12px;
+}
+.birthdayTitle{
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  color: #ffd879;
+  margin-bottom: 6px;
+}
+.birthdayList{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.birthdayRow{
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+}
+.birthdayHandle{
+  color: var(--muted);
+  font-weight: 600;
+}
+.birthdayZodiac{
+  margin-left: 4px;
+  font-size: 10px;
+  padding: 1px 6px;
+}
+.birthdayEmpty{
+  font-size: 12px;
+  color: var(--muted);
+}
