@@ -3,8 +3,8 @@
   "short_name": "Fergis",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0b0f14",
-  "theme_color": "#0b0f14",
+  "background_color": "#F4E9DA",
+  "theme_color": "#F4C430",
   "icons": [
     {
       "src": "./assets/icon-192.png",

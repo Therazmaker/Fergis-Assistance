@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,600;1,700&family=Lato:wght@300;400;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,800;0,900;1,700;1,800;1,900&family=Lato:wght@300;400;700&display=swap');
 
 :root {
   /* ── Paleta Fergis ── */
@@ -104,7 +104,7 @@ body {
 
 .title {
   font-family: var(--font-display);
-  font-weight: 800; font-size: 18px;
+  font-weight: 900; font-size: 18px;
   color: var(--text);
   letter-spacing: -.01em;
 }
@@ -164,7 +164,7 @@ body {
 }
 .heroTitle {
   font-family: var(--font-display);
-  font-size: 30px; font-weight: 800; font-style: italic;
+  font-size: 30px; font-weight: 900; font-style: italic;
   color: var(--text); margin: 8px 0 10px; line-height: 1.15;
 }
 .heroText { color: var(--muted); line-height: 1.55; font-size: 13.5px; }
@@ -245,7 +245,7 @@ body {
 .cardHead.compact { margin-bottom: 8px; }
 .cardTitle {
   font-family: var(--font-display);
-  font-weight: 700; font-size: 16px; color: var(--text);
+  font-weight: 900; font-size: 16px; color: var(--text);
 }
 .cardSub { font-size: 12px; color: var(--muted); margin-top: 3px; }
 .contentDateLine { font-size: 12px; color: var(--terracota); margin-top: 5px; font-weight: 700; }
@@ -443,7 +443,7 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
 .modal.modal-session .modalBody { padding: 16px 20px; }
 .sessTop { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
 .sessTitle { min-width: 0; }
-.sessName { font-family: var(--font-display); font-weight: 800; font-size: 20px; }
+.sessName { font-family: var(--font-display); font-weight: 900; font-size: 20px; }
 .sessPills { margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
 .sessWhen { margin-top: 8px; color: var(--muted); font-size: 12px; }
 .sessBadges { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -461,7 +461,7 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
   padding: 14px 18px; border-bottom: 1px solid var(--line); flex-shrink: 0;
   background: linear-gradient(90deg, rgba(244,196,48,.08), transparent);
 }
-.modalTitle { font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--text); }
+.modalTitle { font-family: var(--font-display); font-weight: 900; font-size: 17px; color: var(--text); }
 .modalBody { padding: 16px 18px; overflow-y: auto; flex: 1 1 auto; min-height: 180px; }
 .modalFoot {
   padding: 14px 18px; border-top: 1px solid var(--line);
@@ -476,7 +476,7 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
 .subscriptionFilters .input { max-width: 180px; }
 .subscriptionBoards { display: flex; flex-direction: column; gap: 16px; }
 .subBoard { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel2); padding: 14px; }
-.subBoard h4 { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--text); margin: 0 0 10px; }
+.subBoard h4 { font-family: var(--font-display); font-size: 20px; font-weight: 900; color: var(--text); margin: 0 0 10px; }
 .subTableWrap { overflow: auto; }
 .subTable { width: 100%; border-collapse: collapse; min-width: 900px; }
 .subTable th, .subTable td { border: 1px solid var(--line); padding: 9px 10px; font-size: 13px; text-align: left; vertical-align: middle; }
@@ -606,8 +606,8 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: blur(3px);
-  transform: scale(1.04); /* prevent blur edge bleed */
+  filter: blur(1.5px);
+  transform: scale(1.03); /* prevent blur edge bleed */
   z-index: 0;
 }
 
@@ -617,10 +617,11 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
   inset: 0;
   border-radius: var(--r);
   background: linear-gradient(
-    135deg,
-    rgba(254,250,244,.82) 0%,
-    rgba(244,233,218,.70) 50%,
-    rgba(244,196,48,.18) 100%
+    to right,
+    rgba(254,250,244,.88) 0%,
+    rgba(254,250,244,.75) 45%,
+    rgba(254,250,244,.92) 65%,
+    rgba(254,250,244,.97) 100%
   );
   z-index: 1;
 }
