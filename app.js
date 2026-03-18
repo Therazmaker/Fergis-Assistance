@@ -4800,3 +4800,52 @@ recoverStateFromIDB();
 render();
 
 window.addEventListener("pagehide", () => saveState());
+
+/* ── Hero editable + image picker ── */
+(function(){
+  const input   = document.getElementById('heroImageInput');
+  const preview = document.getElementById('heroImagePreview');
+  const ph      = document.getElementById('heroImagePlaceholder');
+  const rmBtn   = document.getElementById('heroImageRemove');
+
+  function showImage(src){
+    preview.src = src;
+    preview.classList.remove('hidden');
+    rmBtn.classList.remove('hidden');
+    ph.classList.add('hidden');
+    localStorage.setItem('fergis_hero_img', src);
+  }
+  function clearImage(){
+    preview.src = '';
+    preview.classList.add('hidden');
+    rmBtn.classList.add('hidden');
+    ph.classList.remove('hidden');
+    localStorage.removeItem('fergis_hero_img');
+  }
+
+  // Restore saved image
+  const saved = localStorage.getItem('fergis_hero_img');
+  if(saved) showImage(saved);
+
+  // Click preview -> re-open picker
+  preview.addEventListener('click', () => input.click());
+
+  input.addEventListener('change', () => {
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = e => showImage(e.target.result);
+    reader.readAsDataURL(file);
+  });
+
+  rmBtn.addEventListener('click', clearImage);
+
+  // Persist editable text
+  ['heroTitle','heroText'].forEach(id => {
+    const el = document.getElementById(id);
+    if(!el) return;
+    const saved = localStorage.getItem('fergis_'+id);
+    if(saved) el.textContent = saved;
+    el.addEventListener('blur', () => localStorage.setItem('fergis_'+id, el.textContent));
+  });
+})();
