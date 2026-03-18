@@ -147,6 +147,7 @@ body {
   justify-content: space-between;
   background: linear-gradient(135deg, #FFF8EC 0%, var(--crema) 100%);
   border-color: rgba(244,196,48,.35);
+  padding-bottom: 42px;
 }
 .heroCard::before { opacity: 1; }
 .heroCard::after {
@@ -585,57 +586,96 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
   box-shadow: 0 0 0 2px rgba(244,196,48,.35);
 }
 
-.heroImageArea {
-  margin-top: 12px;
+/* ══════════════════════════════════
+   HERO BACKGROUND IMAGE
+══════════════════════════════════ */
+
+/* When image is active, hero gets a bg-image layer */
+.heroCard.has-bg-image {
+  background: none;
+}
+.heroCard.has-bg-image::after {
+  display: none; /* hide sunflower watermark when image is set */
+}
+
+/* Full-cover background image element inside heroCard */
+.heroBgImage {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  filter: blur(3px);
+  transform: scale(1.04); /* prevent blur edge bleed */
+  z-index: 0;
+}
+
+/* Warm overlay on top of bg image so text stays readable */
+.heroBgOverlay {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r);
+  background: linear-gradient(
+    135deg,
+    rgba(254,250,244,.82) 0%,
+    rgba(244,233,218,.70) 50%,
+    rgba(244,196,48,.18) 100%
+  );
+  z-index: 1;
+}
+
+/* All hero content must sit above the bg layers */
+.heroLeft, .heroRight {
   position: relative;
-  display: inline-block;
-  max-width: 100%;
+  z-index: 2;
+}
+
+/* Image picker button — floats at bottom-left of hero */
+.heroImageArea {
+  position: absolute;
+  bottom: 10px;
+  left: 16px;
+  z-index: 3;
 }
 .heroImagePlaceholder {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  border: 1.5px dashed rgba(184,92,79,.35);
-  border-radius: 10px;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 1.5px dashed rgba(184,92,79,.45);
+  border-radius: 999px;
   cursor: pointer;
-  background: rgba(244,196,48,.05);
+  background: rgba(254,250,244,.75);
+  backdrop-filter: blur(6px);
   transition: background .15s, border-color .15s;
-  width: fit-content;
 }
 .heroImagePlaceholder:hover {
-  background: rgba(244,196,48,.12);
-  border-color: rgba(244,196,48,.6);
+  background: rgba(244,196,48,.25);
+  border-color: rgba(244,196,48,.8);
 }
-.heroImageIcon { font-size: 16px; }
+.heroImageIcon { font-size: 13px; line-height: 1; }
 .heroImageHint {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 11px;
+  color: var(--text2);
   font-weight: 700;
 }
-.heroImagePreview {
-  max-width: 100%;
-  max-height: 180px;
-  border-radius: 12px;
-  border: 1.5px solid rgba(244,196,48,.35);
-  display: block;
-  object-fit: cover;
-  cursor: pointer;
-  transition: opacity .15s;
-}
-.heroImagePreview:hover { opacity: .88; }
+/* Hide old preview styles — image is now used as bg */
+.heroImagePreview { display: none !important; }
 .heroImageRemove {
-  position: absolute;
-  top: 6px; right: 6px;
-  width: 22px; height: 22px;
-  border-radius: 50%;
-  background: rgba(58,35,24,.65);
-  color: #FEFAF4;
-  border: none;
-  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(254,250,244,.75);
+  backdrop-filter: blur(6px);
+  border: 1.5px solid rgba(184,92,79,.4);
+  color: var(--terracota);
   font-size: 11px;
-  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  cursor: pointer;
   transition: background .12s;
 }
-.heroImageRemove:hover { background: var(--terracota); }
+.heroImageRemove:hover { background: rgba(184,92,79,.15); }
 .hidden { display: none !important; }

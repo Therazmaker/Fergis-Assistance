@@ -4804,20 +4804,26 @@ window.addEventListener("pagehide", () => saveState());
 /* ── Hero editable + image picker ── */
 (function(){
   const input   = document.getElementById('heroImageInput');
-  const preview = document.getElementById('heroImagePreview');
   const ph      = document.getElementById('heroImagePlaceholder');
   const rmBtn   = document.getElementById('heroImageRemove');
+  const bgImg   = document.getElementById('heroBgImage');
+  const bgOvl   = document.getElementById('heroBgOverlay');
+  const heroCard = document.getElementById('heroCard');
 
   function showImage(src){
-    preview.src = src;
-    preview.classList.remove('hidden');
+    bgImg.style.backgroundImage = 'url(' + src + ')';
+    bgImg.classList.remove('hidden');
+    bgOvl.classList.remove('hidden');
+    heroCard.classList.add('has-bg-image');
     rmBtn.classList.remove('hidden');
     ph.classList.add('hidden');
     localStorage.setItem('fergis_hero_img', src);
   }
   function clearImage(){
-    preview.src = '';
-    preview.classList.add('hidden');
+    bgImg.style.backgroundImage = '';
+    bgImg.classList.add('hidden');
+    bgOvl.classList.add('hidden');
+    heroCard.classList.remove('has-bg-image');
     rmBtn.classList.add('hidden');
     ph.classList.remove('hidden');
     localStorage.removeItem('fergis_hero_img');
@@ -4826,9 +4832,6 @@ window.addEventListener("pagehide", () => saveState());
   // Restore saved image
   const saved = localStorage.getItem('fergis_hero_img');
   if(saved) showImage(saved);
-
-  // Click preview -> re-open picker
-  preview.addEventListener('click', () => input.click());
 
   input.addEventListener('change', () => {
     const file = input.files[0];
@@ -4844,8 +4847,8 @@ window.addEventListener("pagehide", () => saveState());
   ['heroTitle','heroText'].forEach(id => {
     const el = document.getElementById(id);
     if(!el) return;
-    const saved = localStorage.getItem('fergis_'+id);
-    if(saved) el.textContent = saved;
+    const sv = localStorage.getItem('fergis_'+id);
+    if(sv) el.textContent = sv;
     el.addEventListener('blur', () => localStorage.setItem('fergis_'+id, el.textContent));
   });
 })();

@@ -31,25 +31,31 @@
     </header>
 
     <main class="main">
-      <section class="card heroCard">
+      <section class="card heroCard" id="heroCard">
+        <!-- Background image layers (shown when image is set) -->
+        <div class="heroBgImage hidden" id="heroBgImage"></div>
+        <div class="heroBgOverlay hidden" id="heroBgOverlay"></div>
+
         <div class="heroLeft">
           <div class="heroKicker">HOY</div>
           <h1 class="heroTitle" id="heroTitle" contenteditable="true" spellcheck="false" title="Haz clic para editar">Estructura suave, sin culpa.</h1>
           <div class="heroText" id="heroText" contenteditable="true" spellcheck="false" title="Haz clic para editar">
             Aquí solo sumas pasos pequeños. Si te pausan los síntomas, lo registramos como dato, no como fallo.
           </div>
-          <div class="heroImageArea" id="heroImageArea">
-            <input type="file" id="heroImageInput" accept="image/*" style="display:none" />
-            <div class="heroImagePlaceholder" id="heroImagePlaceholder" onclick="document.getElementById('heroImageInput').click()">
-              <div class="heroImageIcon">🌻</div>
-              <div class="heroImageHint">Agregar imagen</div>
-            </div>
-            <img id="heroImagePreview" class="heroImagePreview hidden" alt="Imagen del día" />
-            <button class="heroImageRemove hidden" id="heroImageRemove" title="Quitar imagen">✕</button>
-          </div>
         </div>
         <div class="heroRight" id="heroLevelDisplay">
           <!-- Level display rendered by JS -->
+        </div>
+
+        <!-- Image picker anchored to bottom of hero -->
+        <div class="heroImageArea" id="heroImageArea">
+          <input type="file" id="heroImageInput" accept="image/*" style="display:none" />
+          <div class="heroImagePlaceholder" id="heroImagePlaceholder" onclick="document.getElementById('heroImageInput').click()">
+            <div class="heroImageIcon">🌸</div>
+            <div class="heroImageHint">Imagen de fondo</div>
+          </div>
+          <img id="heroImagePreview" class="heroImagePreview hidden" alt="" />
+          <button class="heroImageRemove hidden" id="heroImageRemove">🗑 Quitar imagen</button>
         </div>
       </section>
 
