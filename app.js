@@ -14,7 +14,8 @@ const DEFAULT_SETTINGS = {
   syncEnabled: false,
   appsScriptUrl: "",        // ejemplo: https://script.google.com/macros/s/XXXX/exec
   apiKey: "",               // opcional (si lo quieres validar en Apps Script)
-  exchangeRate: 3.75        // tipo de cambio USD → PEN (soles)
+  exchangeRate: 3.75,       // tipo de cambio USD → PEN (soles)
+  heroBlur: 1.5             // blur del banner en px (0 = sin blur, 10 = máximo)
 };
 
 // IMPORTANT:
@@ -4700,6 +4701,24 @@ function openSettings(){
       <div class="divider"></div>
 
       <div class="row">
+        <label class="label">Imagen de fondo del banner</label>
+        <div style="display:flex;align-items:center;gap:12px;margin-top:4px">
+          <span class="itemMeta" style="min-width:60px">Sin blur</span>
+          <input type="range" id="mHeroBlur" min="0" max="10" step="0.5"
+            value="${SETTINGS.heroBlur ?? 1.5}"
+            style="flex:1;accent-color:#F4C430" />
+          <span class="itemMeta" style="min-width:60px">Máximo</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <span class="itemMeta">Blur actual:</span>
+          <strong id="mHeroBlurVal" style="font-size:13px;color:#3A2318">${SETTINGS.heroBlur ?? 1.5}px</strong>
+        </div>
+        <div class="itemMeta" style="margin-top:4px">Controla el desenfoque de la imagen que pones en el hero.</div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
         <label class="label">Exportar memoria completa (JSON)</label>
         <button class="btn" id="btnExport">⬇ Exportar</button>
         <div class="itemMeta">Incluye estado, ajustes y metadatos del respaldo.</div>
@@ -4721,12 +4740,30 @@ function openSettings(){
   );
 
   $("#mCancel").onclick = closeModal;
+
+  // Live blur preview
+  const blurSlider = $("#mHeroBlur");
+  const blurVal = $("#mHeroBlurVal");
+  const bgImgEl = document.getElementById("heroBgImage");
+  if(blurSlider){
+    blurSlider.addEventListener("input", () => {
+      const v = parseFloat(blurSlider.value);
+      blurVal.textContent = v + "px";
+      if(bgImgEl) bgImgEl.style.filter = "blur(" + v + "px)";
+    });
+  }
+
   $("#mOk").onclick = () => {
     SETTINGS.syncEnabled = $("#mSyncEnabled").checked;
     SETTINGS.appsScriptUrl = $("#mScriptUrl").value.trim();
     SETTINGS.apiKey = $("#mApiKey").value.trim();
     const newRate = parseFloat($("#mExchangeRate").value);
     if(!isNaN(newRate) && newRate > 0) SETTINGS.exchangeRate = newRate;
+    const newBlur = parseFloat(blurSlider ? blurSlider.value : 1.5);
+    if(!isNaN(newBlur)) {
+      SETTINGS.heroBlur = newBlur;
+      if(bgImgEl) bgImgEl.style.filter = "blur(" + newBlur + "px)";
+    }
     saveSettings();
     updateSyncUI();
     closeModal();
@@ -4810,8 +4847,13 @@ window.addEventListener("pagehide", () => saveState());
   const bgOvl   = document.getElementById('heroBgOverlay');
   const heroCard = document.getElementById('heroCard');
 
+  function applyBlur(){
+    const blur = (SETTINGS && SETTINGS.heroBlur != null) ? SETTINGS.heroBlur : 1.5;
+    bgImg.style.filter = 'blur(' + blur + 'px)';
+  }
   function showImage(src){
     bgImg.style.backgroundImage = 'url(' + src + ')';
+    applyBlur();
     bgImg.classList.remove('hidden');
     bgOvl.classList.remove('hidden');
     heroCard.classList.add('has-bg-image');

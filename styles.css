@@ -606,8 +606,8 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
-  filter: blur(1.5px);
-  transform: scale(1.03); /* prevent blur edge bleed */
+  filter: blur(1.5px); /* default; overridden by JS from Settings */
+  transform: scale(1.04);
   z-index: 0;
 }
 
