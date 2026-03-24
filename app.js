@@ -309,7 +309,12 @@ function archiveContentIfDayChanged(){
   const active = STATE.contentTodo.activeDate || today;
   ensureContentDay(today);
   ensureContentDay(active);
-  return active !== today;
+  if(active === today) return false;
+  if(!STATE.contentTodo.historyOrder.includes(active)){
+    STATE.contentTodo.historyOrder.unshift(active);
+  }
+  STATE.contentTodo.activeDate = today;
+  return true;
 }
 
 
@@ -2274,7 +2279,8 @@ function renderMetrics(){
 }
 
 function renderContentTodo(){
-  archiveContentIfDayChanged();
+  const autoArchived = archiveContentIfDayChanged();
+  if(autoArchived) saveState();
   const dayKey = STATE.contentTodo.activeDate || getTodayKey();
   const day = ensureContentDay(dayKey);
   const list = $("#contentTodoList");
@@ -2794,7 +2800,7 @@ function renderBookings(){
     return;
   }
 
-  list.innerHTML = occ.slice(0,10).map(({o,b}) => {
+  list.innerHTML = occ.map(({o,b}) => {
     const dt = new Date(o.startAt);
     const when = dt.toLocaleString(undefined, { weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit" });
     const [lbl, cls] = bookingTypeLabel(b.type);

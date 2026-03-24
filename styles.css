@@ -359,6 +359,11 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
   overflow-y: auto;
   padding-right: 4px;
 }
+.bookingsListWindow {
+  max-height: 820px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
 
 /* ══════════════════════════════════
    CALENDAR
