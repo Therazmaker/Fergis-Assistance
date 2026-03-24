@@ -42,6 +42,13 @@ function normHandle(h){
   return (h||"").trim().replace(/^@/,"").toLowerCase();
 }
 
+function normalizeSearchText(value){
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 function amountNum(v){
   if(v == null) return 0;
   if(typeof v === "number") return Number.isFinite(v) ? v : 0;
@@ -2366,11 +2373,21 @@ function renderSessions(){
 function renderClients(){
   const list = $("#clientsList");
   const filter = $("#clientFilter").value;
-  const q = ($("#clientSearch").value || "").trim().toLowerCase();
+  const zodiacFilter = $("#clientZodiacFilter")?.value || "all";
+  const q = normalizeSearchText(($("#clientSearch").value || "").trim());
 
   let items = [...STATE.clients];
   if(filter !== "all") items = items.filter(c => c.status === filter);
-  if(q) items = items.filter(c => (c.name+" "+c.handle+" "+c.phone+" "+c.nextStep).toLowerCase().includes(q));
+  if(zodiacFilter !== "all"){
+    items = items.filter(c => (c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "")) === zodiacFilter);
+  }
+  if(q){
+    items = items.filter(c => {
+      const zodiac = c.zodiac || (c.dob ? zodiacFromDob(c.dob) : "");
+      const blob = `${c.name || ""} ${c.handle || ""} ${c.phone || ""} ${c.nextStep || ""} ${zodiac}`;
+      return normalizeSearchText(blob).includes(q);
+    });
+  }
 
   if(!items.length){
     list.innerHTML = `<div class="item">
@@ -2385,7 +2402,7 @@ function renderClients(){
     return;
   }
 
-  list.innerHTML = items.slice(0,20).map(c => {
+  list.innerHTML = items.slice(0,10).map(c => {
     const name = c.name || c.handle || "(sin nombre)";
     const phone = (c.phone || "").trim();
     const phoneLabel = phone || "Sin teléfono";
@@ -3682,6 +3699,7 @@ function wire(){
   });
 
   $("#clientFilter").addEventListener("change", renderClients);
+  $("#clientZodiacFilter")?.addEventListener("change", renderClients);
   $("#clientSearch").addEventListener("input", renderClients);
 
   $("#btnSettings").addEventListener("click", openSettings);
