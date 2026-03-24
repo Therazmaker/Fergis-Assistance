@@ -354,6 +354,20 @@ function loadState(){
     financeRange: "1M"
   };
 }
+
+function safeLocalStorageSetItem(key, value, contextLabel = "LocalStorage write"){
+  try{
+    localStorage.setItem(key, value);
+    return true;
+  }catch(e){
+    if(e?.name === "QuotaExceededError"){
+      console.warn(`${contextLabel}: cuota de localStorage excedida`, e);
+    }else{
+      console.warn(`${contextLabel}: error al guardar en localStorage`, e);
+    }
+    return false;
+  }
+}
 function openStateDB(){
   if(!("indexedDB" in window)) return Promise.resolve(null);
   if(IDB_PROMISE) return IDB_PROMISE;
@@ -428,11 +442,7 @@ async function recoverStateFromIDB(){
   if(backupUpdated <= currentUpdated) return;
 
   STATE = snapshot;
-  try{
-    localStorage.setItem(LS_KEY, JSON.stringify(STATE));
-  }catch(e){
-    console.warn("LocalStorage restore write error", e);
-  }
+  safeLocalStorageSetItem(LS_KEY, JSON.stringify(STATE), "State restore");
   render();
   toast("Recuperé una copia guardada localmente 💾");
 }
@@ -440,8 +450,11 @@ async function recoverStateFromIDB(){
 function saveState(){
   STATE.updatedAtMs = Date.now();
   const snapshot = JSON.stringify(STATE);
-  localStorage.setItem(LS_KEY, snapshot);
   saveStateSnapshotToIDB(JSON.parse(snapshot));
+  const savedToLocalStorage = safeLocalStorageSetItem(LS_KEY, snapshot, "State save");
+  if(!savedToLocalStorage){
+    toast("Guardado local lleno: seguiré guardando una copia en respaldo 💾");
+  }
 }
 
 function loadSettings(){
@@ -452,7 +465,7 @@ function loadSettings(){
   return { ...DEFAULT_SETTINGS };
 }
 function saveSettings(){
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTINGS));
+  safeLocalStorageSetItem(SETTINGS_KEY, JSON.stringify(SETTINGS), "Settings save");
 }
 
 function loadSyncMeta(){
@@ -468,7 +481,7 @@ function loadSyncMeta(){
 
 function saveSyncMeta(){
   try{
-    localStorage.setItem(SYNC_META_KEY, JSON.stringify(SYNC_META));
+    safeLocalStorageSetItem(SYNC_META_KEY, JSON.stringify(SYNC_META), "Sync meta save");
   }catch(e){
     console.warn("Sync meta save error", e);
   }
