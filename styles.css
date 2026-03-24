@@ -345,11 +345,17 @@ body {
 select.input option,
 select.input optgroup { color: var(--text); background: #FDF8F0; }
 
-.filters { display: flex; gap: 8px; margin-bottom: 12px; }
+.filters { display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; }
 .filters .input.small { flex: 1; }
 .filters select.input.small { flex: 0 0 160px; }
+.filters .filterSearchRow { flex: 1 1 100%; min-width: 0; }
 .clientsListWindow {
   max-height: 640px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.nextStepsListWindow {
+  max-height: 700px;
   overflow-y: auto;
   padding-right: 4px;
 }
