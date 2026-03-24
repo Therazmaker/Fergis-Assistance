@@ -2449,7 +2449,7 @@ function renderNextSteps(){
     return;
   }
 
-  list.innerHTML = rows.slice(0,30).map(r => {
+  list.innerHTML = rows.map(r => {
     const dt = new Date(r.createdAt).toLocaleDateString();
     const next = r.nextStep || "—";
     const notes = r.notes ? `<div class="itemMeta">Notas: ${escapeHtml(r.notes)}</div>` : "";
