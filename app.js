@@ -315,9 +315,9 @@ function archiveContentIfDayChanged(){
   if(active === today) return false;
   if(!STATE.contentTodo.historyOrder.includes(active)){
     STATE.contentTodo.historyOrder.unshift(active);
+    return true;
   }
-  STATE.contentTodo.activeDate = today;
-  return true;
+  return false;
 }
 
 
