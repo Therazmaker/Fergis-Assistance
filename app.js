@@ -1332,10 +1332,13 @@ function deleteTask(taskId){
 }
 
 function movePlanTaskByOffset(taskId, offset){
+  const targetTask = STATE.tasks.find(x => x.id === taskId);
+  if(!targetTask || targetTask.category !== "plan") return;
+
   const planIndexes = [];
   for(let i=0;i<STATE.tasks.length;i++){
     const task = STATE.tasks[i];
-    if(task.category === "plan") planIndexes.push(i);
+    if(task.category === "plan" && (task.assignee || "") === (targetTask.assignee || "")) planIndexes.push(i);
   }
 
   const relIndex = planIndexes.findIndex((idx) => STATE.tasks[idx].id === taskId);
@@ -2342,10 +2345,16 @@ function renderPlan(){
     return;
   }
 
-  list.innerHTML = items.map((t, idx) => {
+  const groups = [
+    { key: "fergis", label: "Asignado a Fergis" },
+    { key: "carlos", label: "Asignado a Carlos" },
+    { key: "ambos", label: "Asignado a Ambos" }
+  ];
+
+  function renderPlanTaskRow(t, idx, total){
     const done = !!t.doneAt;
     const isFirst = idx === 0;
-    const isLast = idx === items.length - 1;
+    const isLast = idx === total - 1;
     const metaParts = [];
     if(t.assignee) metaParts.push(t.assignee.charAt(0).toUpperCase() + t.assignee.slice(1));
     if(t.frequency === "dia") metaParts.push("Diaria");
@@ -2369,6 +2378,19 @@ function renderPlan(){
         <button class="btn ghost" data-act="planDelete" data-id="${t.id}" title="Eliminar">🗑</button>
       </div>
     </div>`;
+  }
+
+  list.innerHTML = groups.map((group) => {
+    const groupItems = items.filter(t => (t.assignee || "") === group.key);
+    const rows = groupItems.length
+      ? groupItems.map((t, idx) => renderPlanTaskRow(t, idx, groupItems.length)).join("")
+      : `<div class="item compact"><div class="itemMeta">Sin tareas en esta sección.</div></div>`;
+    return `
+      <div class="sectionBlock">
+        <div class="sectionTitle">${group.label}</div>
+        ${rows}
+      </div>
+    `;
   }).join("");
 }
 
@@ -3349,6 +3371,7 @@ function wire(){
             <option value="">-- Seleccionar --</option>
             <option value="fergis">Fergis</option>
             <option value="carlos">Carlos</option>
+            <option value="ambos">Ambos</option>
           </select>
         </div>
 
