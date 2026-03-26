@@ -1051,7 +1051,8 @@ function makeTask_(title, opts={}){
     notes: opts.notes || "",
     category: opts.category || "mission", // mission | plan
     assignee: opts.assignee || "",        // fergis | carlos
-    frequency: opts.frequency || ""       // diaria | semanal | quincenal | mensual
+    frequency: opts.frequency || "",       // dia | semana
+    frequencyDay: opts.frequencyDay || ""  // lunes | martes | miércoles | jueves | viernes | sábado | domingo
   };
 }
 
@@ -1220,7 +1221,8 @@ function addTask(title, opts={}){
     notes: opts.notes || "",
     createdAt: opts.createdAt || nowISO(),
     assignee: opts.assignee || "",
-    frequency: opts.frequency || ""
+    frequency: opts.frequency || "",
+    frequencyDay: opts.frequencyDay || ""
   });
 
   STATE.tasks.unshift(t);
@@ -3239,10 +3241,21 @@ function wire(){
           <label class="label">Frecuencia</label>
           <select id="mTaskFrequency" class="input">
             <option value="">-- Seleccionar --</option>
-            <option value="diaria">Diaria</option>
-            <option value="semanal">Semanal</option>
-            <option value="quincenal">Quincenal</option>
-            <option value="mensual">Mensual</option>
+            <option value="dia">Día</option>
+            <option value="semana">Semana</option>
+          </select>
+        </div>
+        <div class="row" id="mTaskFrequencyDayRow" style="display:none">
+          <label class="label">Día de la semana</label>
+          <select id="mTaskFrequencyDay" class="input">
+            <option value="">-- Seleccionar --</option>
+            <option value="lunes">Lunes</option>
+            <option value="martes">Martes</option>
+            <option value="miércoles">Miércoles</option>
+            <option value="jueves">Jueves</option>
+            <option value="viernes">Viernes</option>
+            <option value="sábado">Sábado</option>
+            <option value="domingo">Domingo</option>
           </select>
         </div>
         ` : ""}
@@ -3257,6 +3270,15 @@ function wire(){
     );
 
     $("#mCancel").onclick = closeModal;
+
+    const freqEl = $("#mTaskFrequency");
+    if(freqEl){
+      freqEl.onchange = () => {
+        const dayRow = $("#mTaskFrequencyDayRow");
+        if(dayRow) dayRow.style.display = freqEl.value === "semana" ? "" : "none";
+      };
+    }
+
     $("#mOk").onclick = () => {
       const title = $("#mTaskTitle").value.trim();
       const cat = $("#mTaskCat").value || "mission";
@@ -3264,17 +3286,20 @@ function wire(){
       const day = dayInput ? (dayInput.value || todayKey()) : todayKey();
       const assigneeEl = $("#mTaskAssignee");
       const frequencyEl = $("#mTaskFrequency");
+      const frequencyDayEl = $("#mTaskFrequencyDay");
       const assignee = assigneeEl ? assigneeEl.value : "";
       const frequency = frequencyEl ? frequencyEl.value : "";
+      const frequencyDay = frequencyDayEl ? frequencyDayEl.value : "";
 
       if(!title){ toast("Escribe un título."); return; }
+      if(frequency === "semana" && !frequencyDay){ toast("Selecciona el día de la semana."); return; }
 
       if(cat === "mission" && day === todayKey()){
         const count = STATE.tasks.filter(t => t.pinnedDay===day && (t.category||"mission")!=="plan").slice(0,3).length;
         if(count >= 3){ toast("Máximo 3 misiones para hoy."); return; }
       }
 
-      addTask(title, { pinnedDay: day, category: cat, assignee, frequency });
+      addTask(title, { pinnedDay: day, category: cat, assignee, frequency, frequencyDay });
       closeModal();
     };
   }
