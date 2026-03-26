@@ -9,6 +9,9 @@ const DB_NAME = "fergis_assistant_db";
 const DB_VERSION = 1;
 const STATE_STORE = "state_snapshots";
 const STATE_SNAPSHOT_ID = "main";
+const SYNC_META_IDB_ID  = "sync_meta";
+const HERO_IMG_IDB_ID   = "hero_img";
+const LS_QUOTA_WARN_DEBOUNCE_MS = 30000;
 
 const DEFAULT_SETTINGS = {
   syncEnabled: false,
@@ -459,13 +462,88 @@ async function recoverStateFromIDB(){
   toast("Recuperé una copia guardada localmente 💾");
 }
 
+async function saveSyncMetaToIDB(){
+  const db = await openStateDB();
+  if(!db) return;
+  await new Promise((resolve) => {
+    try{
+      const tx = db.transaction(STATE_STORE, "readwrite");
+      tx.objectStore(STATE_STORE).put({ id: SYNC_META_IDB_ID, meta: SYNC_META, savedAt: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => { console.warn("IndexedDB sync meta save error", tx.error); resolve(); };
+    }catch(e){ console.warn("IndexedDB sync meta tx error", e); resolve(); }
+  });
+}
+
+async function recoverSyncMetaFromIDB(){
+  if(Object.keys(SYNC_META).length > 0) return;
+  const db = await openStateDB();
+  if(!db) return;
+  const row = await new Promise((resolve) => {
+    try{
+      const tx = db.transaction(STATE_STORE, "readonly");
+      const req = tx.objectStore(STATE_STORE).get(SYNC_META_IDB_ID);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => { console.warn("IndexedDB sync meta read error", req.error); resolve(null); };
+    }catch(e){ console.warn("IndexedDB sync meta tx error", e); resolve(null); }
+  });
+  if(row?.meta && typeof row.meta === "object"){
+    SYNC_META = row.meta;
+  }
+}
+
+async function saveHeroImgToIDB(src){
+  const db = await openStateDB();
+  if(!db) return;
+  await new Promise((resolve) => {
+    try{
+      const tx = db.transaction(STATE_STORE, "readwrite");
+      tx.objectStore(STATE_STORE).put({ id: HERO_IMG_IDB_ID, src, savedAt: Date.now() });
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => { console.warn("IndexedDB hero img save error", tx.error); resolve(); };
+    }catch(e){ console.warn("IndexedDB hero img tx error", e); resolve(); }
+  });
+}
+
+async function loadHeroImgFromIDB(){
+  const db = await openStateDB();
+  if(!db) return null;
+  return new Promise((resolve) => {
+    try{
+      const tx = db.transaction(STATE_STORE, "readonly");
+      const req = tx.objectStore(STATE_STORE).get(HERO_IMG_IDB_ID);
+      req.onsuccess = () => resolve(req.result?.src || null);
+      req.onerror = () => { console.warn("IndexedDB hero img read error", req.error); resolve(null); };
+    }catch(e){ console.warn("IndexedDB hero img tx error", e); resolve(null); }
+  });
+}
+
+async function clearHeroImgFromIDB(){
+  const db = await openStateDB();
+  if(!db) return;
+  await new Promise((resolve) => {
+    try{
+      const tx = db.transaction(STATE_STORE, "readwrite");
+      tx.objectStore(STATE_STORE).delete(HERO_IMG_IDB_ID);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => { resolve(); };
+    }catch(e){ resolve(); }
+  });
+}
+
+let _lsQuotaWarnedMs = 0;
+
 function saveState(){
   STATE.updatedAtMs = Date.now();
   const snapshot = JSON.stringify(STATE);
   saveStateSnapshotToIDB(JSON.parse(snapshot));
   const savedToLocalStorage = safeLocalStorageSetItem(LS_KEY, snapshot, "State save");
   if(!savedToLocalStorage){
-    toast("Guardado local lleno: seguiré guardando una copia en respaldo 💾");
+    const now = Date.now();
+    if(now - _lsQuotaWarnedMs > LS_QUOTA_WARN_DEBOUNCE_MS){
+      _lsQuotaWarnedMs = now;
+      toast("Guardado local lleno: seguiré guardando una copia en respaldo 💾");
+    }
   }
 }
 
@@ -497,6 +575,7 @@ function saveSyncMeta(){
   }catch(e){
     console.warn("Sync meta save error", e);
   }
+  saveSyncMetaToIDB();
 }
 
 function ensureSyncMetaTab(tabId){
@@ -4975,6 +5054,7 @@ if("serviceWorker" in navigator){
 
 wire();
 recoverStateFromIDB();
+recoverSyncMetaFromIDB();
 render();
 
 window.addEventListener("pagehide", () => saveState());
@@ -5011,7 +5091,7 @@ window.addEventListener("pagehide", () => saveState());
     heroCard.classList.add('has-bg-image');
     rmBtn.classList.remove('hidden');
     ph.classList.add('hidden');
-    localStorage.setItem('fergis_hero_img', src);
+    saveHeroImgToIDB(src);
   }
   function clearImage(){
     bgImg.style.backgroundImage = '';
@@ -5020,12 +5100,23 @@ window.addEventListener("pagehide", () => saveState());
     heroCard.classList.remove('has-bg-image');
     rmBtn.classList.add('hidden');
     ph.classList.remove('hidden');
+    clearHeroImgFromIDB();
     localStorage.removeItem('fergis_hero_img');
   }
 
-  // Restore saved image
-  const saved = localStorage.getItem('fergis_hero_img');
-  if(saved) showImage(saved);
+  // Restore saved image: try IDB first, migrate from localStorage if needed
+  loadHeroImgFromIDB().then(async src => {
+    if(src){
+      showImage(src);
+    } else {
+      const lsSrc = localStorage.getItem('fergis_hero_img');
+      if(lsSrc){
+        await saveHeroImgToIDB(lsSrc);
+        localStorage.removeItem('fergis_hero_img');
+        showImage(lsSrc);
+      }
+    }
+  });
 
   input.addEventListener('change', () => {
     const file = input.files[0];
@@ -5043,6 +5134,6 @@ window.addEventListener("pagehide", () => saveState());
     if(!el) return;
     const sv = localStorage.getItem('fergis_'+id);
     if(sv) el.textContent = sv;
-    el.addEventListener('blur', () => localStorage.setItem('fergis_'+id, el.textContent));
+    el.addEventListener('blur', () => safeLocalStorageSetItem('fergis_'+id, el.textContent, 'Hero text save'));
   });
 })();
