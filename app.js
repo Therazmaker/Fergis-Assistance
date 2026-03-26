@@ -2408,7 +2408,7 @@ function renderPlan(){
     </div>`;
   }
 
-  list.innerHTML = groups.map((group) => {
+  list.innerHTML = `<div class="planAssigneeGrid">${groups.map((group) => {
     const groupItems = items.filter(t => (t.assignee || "") === group.key);
     const rows = groupItems.length
       ? groupItems.map((t, idx) => renderPlanTaskRow(t, idx, groupItems.length)).join("")
@@ -2419,7 +2419,7 @@ function renderPlan(){
         ${rows}
       </div>
     `;
-  }).join("");
+  }).join("")}</div>`;
 }
 
 function renderMetrics(){

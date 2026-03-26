@@ -289,6 +289,16 @@ body {
   color: var(--text2);
   margin: 6px 2px 8px;
 }
+.planAssigneeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+.planAssigneeGrid .sectionBlock { margin-bottom: 0; }
+
+@media (max-width: 900px){
+  .planAssigneeGrid { grid-template-columns: 1fr; }
+}
 
 /* ══════════════════════════════════
    PILLS & BADGES
