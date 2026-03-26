@@ -2012,9 +2012,9 @@ function addSubscription(obj={}){
 
 function openSubscriptionModal(){
   const clientOptions = STATE.clients
-    .map(c => (c.name || c.handle || "").trim())
-    .filter(Boolean)
-    .sort((a,b)=>a.localeCompare(b, "es", { sensitivity: "base" }));
+    .map(c => ({ id: c.id, name: (c.name || c.handle || "").trim() }))
+    .filter(c => c.name)
+    .sort((a,b)=>a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
 
   openModal(
     "Nuevo registro de suscripción",
@@ -2023,7 +2023,7 @@ function openSubscriptionModal(){
     <div class="row"><label class="label">Nombre</label>
       <select id="mSubName" class="input">
         <option value="">Selecciona cliente</option>
-        ${clientOptions.map(name=>`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("")}
+        ${clientOptions.map(c=>`<option value="${escapeAttr(c.id)}">${escapeHtml(c.name)}</option>`).join("")}
       </select>
     </div>
     <div class="row"><label class="label">Costo soles</label><input id="mSubSoles" type="number" class="input" min="0" step="0.01" /></div>
@@ -2033,6 +2033,7 @@ function openSubscriptionModal(){
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
+  const subNameEl = $("#mSubName");
   $("#mSave").onclick = async () => {
     const file = $("#mSubInvoice")?.files?.[0];
     let invoiceImage = "";
@@ -2048,10 +2049,12 @@ function openSubscriptionModal(){
       invoiceImage = String(b64);
       invoiceImageName = file.name || "";
     }
+    const selectedClient = STATE.clients.find(c => String(c.id) === String(subNameEl?.value || ""));
+    const selectedClientName = (selectedClient?.name || selectedClient?.handle || "").trim();
     addSubscription({
       type: $("#mSubType").value,
       paymentDate: $("#mSubDate").value || todayKey(),
-      name: $("#mSubName").value,
+      name: selectedClientName,
       costSoles: $("#mSubSoles").value,
       costDolares: $("#mSubDol").value,
       observations: $("#mSubObs").value,
@@ -2142,9 +2145,9 @@ function addOneToOneSession(obj={}){
 
 function openOneToOneSessionModal(){
   const clientOptions = STATE.clients
-    .map(c => (c.name || c.handle || "").trim())
-    .filter(Boolean)
-    .sort((a,b)=>a.localeCompare(b, "es", { sensitivity: "base" }));
+    .map(c => ({ id: c.id, name: (c.name || c.handle || "").trim() }))
+    .filter(c => c.name)
+    .sort((a,b)=>a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
 
   openModal(
     "Nueva sesión 1:1",
@@ -2152,7 +2155,7 @@ function openOneToOneSessionModal(){
     <div class="row"><label class="label">Consultante</label>
       <select id="mS11Consultant" class="input">
         <option value="">Selecciona cliente</option>
-        ${clientOptions.map(name=>`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("")}
+        ${clientOptions.map(c=>`<option value="${escapeAttr(c.id)}">${escapeHtml(c.name)}</option>`).join("")}
       </select>
     </div>
     <div class="row"><label class="label">Contacto</label><input id="mS11Contact" class="input" /></div>
@@ -2165,6 +2168,20 @@ function openOneToOneSessionModal(){
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
+  const s11ConsultantEl = $("#mS11Consultant");
+  const s11ContactEl = $("#mS11Contact");
+  const s11BirthDateEl = $("#mS11BirthDate");
+  const syncOneToOneClientData = () => {
+    const selected = STATE.clients.find(c => String(c.id) === String(s11ConsultantEl?.value || ""));
+    if(!selected){
+      s11ContactEl.value = "";
+      s11BirthDateEl.value = "";
+      return;
+    }
+    s11ContactEl.value = selected.phone || "";
+    s11BirthDateEl.value = selected.dob || "";
+  };
+  s11ConsultantEl?.addEventListener("change", syncOneToOneClientData);
   $("#mSave").onclick = async () => {
     const file = $("#mS11Invoice")?.files?.[0];
     let invoiceImage = "";
@@ -2180,9 +2197,11 @@ function openOneToOneSessionModal(){
       invoiceImage = String(b64);
       invoiceImageName = file.name || "";
     }
+    const selectedClient = STATE.clients.find(c => String(c.id) === String(s11ConsultantEl?.value || ""));
+    const selectedClientName = (selectedClient?.name || selectedClient?.handle || "").trim();
     addOneToOneSession({
       date: $("#mS11Date").value || todayKey(),
-      consultant: $("#mS11Consultant").value,
+      consultant: selectedClientName,
       contact: $("#mS11Contact").value,
       birthDate: $("#mS11BirthDate").value,
       sessionType: $("#mS11SessionType").value,
@@ -2275,9 +2294,9 @@ function addQuestionReading(obj={}){
 
 function openQuestionReadingModal(){
   const clientOptions = STATE.clients
-    .map(c => (c.name || c.handle || "").trim())
-    .filter(Boolean)
-    .sort((a,b)=>a.localeCompare(b, "es", { sensitivity: "base" }));
+    .map(c => ({ id: c.id, name: (c.name || c.handle || "").trim() }))
+    .filter(c => c.name)
+    .sort((a,b)=>a.name.localeCompare(b.name, "es", { sensitivity: "base" }));
 
   openModal(
     "Nueva lectura por preguntas",
@@ -2285,7 +2304,7 @@ function openQuestionReadingModal(){
     <div class="row"><label class="label">Nombre de consultante</label>
       <select id="mQrConsultant" class="input">
         <option value="">Selecciona cliente</option>
-        ${clientOptions.map(name=>`<option value="${escapeAttr(name)}">${escapeHtml(name)}</option>`).join("")}
+        ${clientOptions.map(c=>`<option value="${escapeAttr(c.id)}">${escapeHtml(c.name)}</option>`).join("")}
       </select>
     </div>
     <div class="row"><label class="label">Fecha de nacimiento</label><input id="mQrBirthDate" type="date" class="input" /></div>
@@ -2297,6 +2316,13 @@ function openQuestionReadingModal(){
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
+  const qrConsultantEl = $("#mQrConsultant");
+  const qrBirthDateEl = $("#mQrBirthDate");
+  const syncQuestionReadingClientData = () => {
+    const selected = STATE.clients.find(c => String(c.id) === String(qrConsultantEl?.value || ""));
+    qrBirthDateEl.value = selected?.dob || "";
+  };
+  qrConsultantEl?.addEventListener("change", syncQuestionReadingClientData);
   $("#mSave").onclick = async () => {
     const file = $("#mQrInvoice")?.files?.[0];
     let invoiceImage = "";
@@ -2312,9 +2338,11 @@ function openQuestionReadingModal(){
       invoiceImage = String(b64);
       invoiceImageName = file.name || "";
     }
+    const selectedClient = STATE.clients.find(c => String(c.id) === String(qrConsultantEl?.value || ""));
+    const selectedClientName = (selectedClient?.name || selectedClient?.handle || "").trim();
     addQuestionReading({
       date: $("#mQrDate").value || todayKey(),
-      consultant: $("#mQrConsultant").value,
+      consultant: selectedClientName,
       birthDate: $("#mQrBirthDate").value,
       questionsCount: $("#mQrQuestionsCount").value,
       costSoles: $("#mQrCostSoles").value,
