@@ -537,7 +537,7 @@ async function clearHeroImgFromIDB(){
 
 let _lsQuotaWarnedMs = 0;
 
-function saveState(){
+function saveState(opts = {}){
   STATE.updatedAtMs = Date.now();
   const snapshot = JSON.stringify(STATE);
   saveStateSnapshotToIDB(JSON.parse(snapshot));
@@ -551,6 +551,10 @@ function saveState(){
       _lsQuotaWarnedMs = now;
       toast("Guardado local lleno: seguiré guardando una copia en respaldo 💾");
     }
+  }
+
+  if(opts.trackLocalTabUpdate !== false){
+    markActiveTabLocalUpdated_();
   }
 }
 
@@ -596,6 +600,26 @@ function ensureSyncMetaTab(tabId){
     };
   }
   return SYNC_META[tabId];
+}
+
+function markTabLocalUpdated_(tabId, iso = nowISO()){
+  if(!tabId || !SYNC_META || typeof SYNC_META !== "object") return;
+  const meta = ensureSyncMetaTab(tabId);
+  const currentTs = Date.parse(meta.lastLocalUpdatedAt || "") || 0;
+  const nextTs = Date.parse(iso || "") || Date.now();
+  if(nextTs >= currentTs){
+    meta.lastLocalUpdatedAt = iso || nowISO();
+  }
+  if(meta.status !== "syncing"){
+    meta.status = "pending";
+  }
+  saveSyncMeta();
+}
+
+function markActiveTabLocalUpdated_(){
+  if(!STATE || typeof STATE !== "object") return;
+  const tabId = getTabIdFromActiveTab(STATE.activeTab);
+  markTabLocalUpdated_(tabId);
 }
 
 // ---------- State normalization ----------
@@ -1648,7 +1672,7 @@ function applySheetStateSnapshot_(sheetState){
   });
 
   STATE = nextState;
-  saveState();
+  saveState({ trackLocalTabUpdate: false });
   render();
 }
 
@@ -1725,6 +1749,7 @@ function mergeRemoteTabIntoState(tabId, remotePayload, currentState){
   if(remoteUpdatedAt > localUpdatedAt){
     console.info(`[SheetSync] pullTab applied remote tab: ${tabId}`);
     meta.status = "synced";
+    meta.lastLocalUpdatedAt = remotePayload.updatedAt || nowISO();
     meta.lastRemoteUpdatedAt = remotePayload.updatedAt || nowISO();
     meta.lastPullAt = nowISO();
     saveSyncMeta();
@@ -1741,6 +1766,7 @@ function mergeRemoteTabIntoState(tabId, remotePayload, currentState){
   }
 
   meta.status = "synced";
+  meta.lastLocalUpdatedAt = remotePayload?.updatedAt || nowISO();
   meta.lastPullAt = nowISO();
   saveSyncMeta();
   return applyTabSyncPayload(tabId, remotePayload, currentState);
@@ -1801,7 +1827,7 @@ async function pullCurrentTabFromSheet(){
   const res = await sheetSyncGet_("pullTab", tabId);
   if(res?.tab){
     STATE = mergeRemoteTabIntoState(tabId, res.tab, STATE);
-    saveState();
+    saveState({ trackLocalTabUpdate: false });
     render();
     meta.lastRemoteUpdatedAt = res.tab.updatedAt || meta.lastRemoteUpdatedAt;
     meta.lastPullAt = nowISO();
@@ -1839,7 +1865,7 @@ async function pullAllTabsFromSheet(){
     next = mergeRemoteTabIntoState(tab.tabId, tab, next);
   }
   STATE = normalizeState_(next);
-  saveState();
+  saveState({ trackLocalTabUpdate: false });
   render();
   console.info("[SheetSync] pullAll completed");
   statusEl.textContent = "Sync: pullAll ✅";
