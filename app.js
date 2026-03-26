@@ -2260,6 +2260,12 @@ function renderPlan(){
     const done = !!t.doneAt;
     const isFirst = idx === 0;
     const isLast = idx === items.length - 1;
+    const metaParts = [];
+    if(t.assignee) metaParts.push(t.assignee.charAt(0).toUpperCase() + t.assignee.slice(1));
+    if(t.frequency === "dia") metaParts.push("Diaria");
+    else if(t.frequency === "semana") metaParts.push("Semanal" + (t.frequencyDay ? " · " + t.frequencyDay.charAt(0).toUpperCase() + t.frequencyDay.slice(1) : ""));
+    const metaStatus = done ? "Hecho ✅" : "Por hacer";
+    const metaInfo = metaParts.length ? " · " + metaParts.join(" · ") : "";
     return `<div class="item">
       <div class="itemLeft">
         <button class="btn ${done ? "primary":""}" data-act="planToggle" data-id="${t.id}" title="Marcar hecho">
@@ -2267,7 +2273,7 @@ function renderPlan(){
         </button>
         <div>
           <div class="itemTitle">${escapeHtml(t.title)}</div>
-          <div class="itemMeta">${done ? "Hecho ✅" : "Por hacer"}</div>
+          <div class="itemMeta">${metaStatus}${metaInfo}</div>
         </div>
       </div>
       <div style="display:flex;gap:8px;align-items:center">
