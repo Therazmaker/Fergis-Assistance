@@ -528,6 +528,9 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
 .chartLine.soles { stroke: var(--girasol); }
 .chartLine.dolares { stroke: var(--rosa-viejo); }
 .chartLabel { fill: var(--muted); font-size: 10px; }
+.chartDot { stroke-width: 1.5; }
+.chartDot.soles { fill: var(--girasol); stroke: var(--girasol); }
+.chartDot.dolares { fill: var(--rosa-viejo); stroke: var(--rosa-viejo); }
 .financeLegend { display: flex; gap: 14px; margin-top: 10px; font-size: 12px; color: var(--muted); }
 .legendDot { display: inline-block; width: 9px; height: 9px; border-radius: 999px; margin-right: 5px; vertical-align: middle; }
 .legendDot.soles { background: var(--girasol); }

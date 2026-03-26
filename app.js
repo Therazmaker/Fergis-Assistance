@@ -454,12 +454,16 @@ async function recoverStateFromIDB(){
   const snapshot = normalizeState_(row.snapshot);
   const currentUpdated = Number(STATE.updatedAtMs || 0);
   const backupUpdated = Number(snapshot.updatedAtMs || 0);
-  if(backupUpdated <= currentUpdated) return;
+  // Use strict less-than: when timestamps are equal, prefer IDB (which holds the full
+  // state including invoice images stripped from the compact localStorage version).
+  if(backupUpdated < currentUpdated) return;
 
+  const isNewer = backupUpdated > currentUpdated;
   STATE = snapshot;
-  safeLocalStorageSetItem(LS_KEY, JSON.stringify(STATE), "State restore");
+  // Save compact version back to localStorage (avoid re-introducing quota issues).
+  safeLocalStorageSetItem(LS_KEY, JSON.stringify(stripLargeDataForSync_(snapshot)), "State restore");
   render();
-  toast("Recuperé una copia guardada localmente 💾");
+  if(isNewer) toast("Recuperé una copia guardada localmente 💾");
 }
 
 async function saveSyncMetaToIDB(){
@@ -537,7 +541,10 @@ function saveState(){
   STATE.updatedAtMs = Date.now();
   const snapshot = JSON.stringify(STATE);
   saveStateSnapshotToIDB(JSON.parse(snapshot));
-  const savedToLocalStorage = safeLocalStorageSetItem(LS_KEY, snapshot, "State save");
+  // Save a compact version (no large binary data like invoice images) to localStorage
+  // to avoid QuotaExceededError. Full state is always preserved in IndexedDB.
+  const compact = JSON.stringify(stripLargeDataForSync_(JSON.parse(snapshot)));
+  const savedToLocalStorage = safeLocalStorageSetItem(LS_KEY, compact, "State save");
   if(!savedToLocalStorage){
     const now = Date.now();
     if(now - _lsQuotaWarnedMs > LS_QUOTA_WARN_DEBOUNCE_MS){
@@ -2680,29 +2687,52 @@ function renderFinance(){
 
   const maxY = Math.max(...series.map(x => Math.max(x.soles, x.dolares)), 1);
   const w = 760;
-  const h = 240;
-  const p = 26;
-  const xFor = (idx) => p + (idx * ((w - p*2) / Math.max(series.length-1, 1)));
-  const yFor = (v) => h - p - ((v / maxY) * (h - p*2));
+  const h = 260;
+  const pl = 54; // left padding for y-axis labels
+  const pr = 16; // right padding
+  const pt = 20; // top padding
+  const pb = 34; // bottom padding for x-axis labels
+  const xFor = (idx) => pl + (idx * ((w - pl - pr) / Math.max(series.length - 1, 1)));
+  const yFor = (v) => pt + ((1 - v / maxY) * (h - pt - pb));
   const solesPath = series.map((v,i)=>`${xFor(i)},${yFor(v.soles)}`).join(" ");
   const usdPath = series.map((v,i)=>`${xFor(i)},${yFor(v.dolares)}`).join(" ");
+
+  // Y-axis: grid lines + value labels on the left
   const ticks = [0, 0.25, 0.5, 0.75, 1].map((r)=>{
-    const y = yFor(maxY*r);
-    return `<line x1="${p}" y1="${y}" x2="${w-p}" y2="${y}" class="chartGrid" />`;
+    const val = maxY * r;
+    const y = yFor(val);
+    const fmt = val >= 1000 ? `${(val / 1000).toFixed(1)}k` : val >= 10 ? val.toFixed(0) : val > 0 ? val.toFixed(1) : "0";
+    return `<line x1="${pl}" y1="${y}" x2="${w - pr}" y2="${y}" class="chartGrid" /><text x="${pl - 6}" y="${y + 4}" class="chartLabel" text-anchor="end">${fmt}</text>`;
   }).join("");
 
-  const labels = [0, Math.floor((series.length-1)/2), series.length-1]
-    .filter((v, i, arr)=>arr.indexOf(v)===i)
-    .map((idx)=>{
-      const d = new Date(`${series[idx].key}T00:00:00`);
-      return `<text x="${xFor(idx)}" y="${h-8}" class="chartLabel" text-anchor="middle">${d.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit' })}</text>`;
-    }).join("");
+  // X-axis: show all date labels if ≤ 15 data points, otherwise sample ~8 evenly
+  const MAX_X_LABELS = 8;
+  let xLabelIndices;
+  if(series.length <= 15){
+    xLabelIndices = series.map((_, i) => i);
+  }else{
+    const step = Math.ceil(series.length / (MAX_X_LABELS - 1));
+    xLabelIndices = [];
+    for(let i = 0; i < series.length; i += step) xLabelIndices.push(i);
+    if(xLabelIndices[xLabelIndices.length - 1] !== series.length - 1) xLabelIndices.push(series.length - 1);
+  }
+  const labels = xLabelIndices.map((idx)=>{
+    const d = new Date(`${series[idx].key}T00:00:00`);
+    return `<text x="${xFor(idx)}" y="${h - 10}" class="chartLabel" text-anchor="middle">${d.toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit' })}</text>`;
+  }).join("");
+
+  // Dots at each data point
+  const solesDots = series.map((v,i)=>`<circle cx="${xFor(i)}" cy="${yFor(v.soles)}" r="3" class="chartDot soles" />`).join("");
+  const usdDots = series.map((v,i)=>`<circle cx="${xFor(i)}" cy="${yFor(v.dolares)}" r="3" class="chartDot dolares" />`).join("");
 
   chartEl.innerHTML = `
     <svg viewBox="0 0 ${w} ${h}" class="financeSvg" role="img" aria-label="Ingresos por fecha">
       ${ticks}
+      <line x1="${pl}" y1="${pt}" x2="${pl}" y2="${h - pb}" class="chartGrid" />
       <polyline points="${solesPath}" class="chartLine soles" />
       <polyline points="${usdPath}" class="chartLine dolares" />
+      ${solesDots}
+      ${usdDots}
       ${labels}
     </svg>
     <div class="financeLegend">
