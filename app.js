@@ -233,6 +233,92 @@ function parseInputDateTimeLocal(val){
   return d.toISOString();
 }
 
+const HOME_TIMEZONE = "America/Lima";
+const HOME_TIMEZONE_LABEL = "Perú";
+const RESIDENCE_TIMEZONE_HINTS = [
+  { tz: "America/Lima", keys: ["peru","perú","lima","cusco","arequipa","trujillo","piura"] },
+  { tz: "Europe/Paris", keys: ["francia","france","paris","lyon","marseille","toulouse"] },
+  { tz: "Europe/Madrid", keys: ["espana","españa","spain","madrid","barcelona","sevilla","valencia"] }
+];
+
+function normalizePlaceText(v){
+  return String(v || "")
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function inferTimezoneFromResidence(place){
+  const norm = normalizePlaceText(place);
+  if(!norm) return HOME_TIMEZONE;
+  for(const row of RESIDENCE_TIMEZONE_HINTS){
+    if(row.keys.some(k => norm.includes(k))) return row.tz;
+  }
+  return HOME_TIMEZONE;
+}
+
+function timePartsInZone(dateInput, timeZone){
+  const d = (dateInput instanceof Date) ? dateInput : new Date(dateInput);
+  if(Number.isNaN(d.getTime())) return null;
+  const fmt = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false
+  });
+  const parts = fmt.formatToParts(d);
+  const get = (type) => Number(parts.find(p => p.type === type)?.value || 0);
+  return {
+    year: get("year"),
+    month: get("month"),
+    day: get("day"),
+    hour: get("hour"),
+    minute: get("minute"),
+    second: get("second")
+  };
+}
+
+function splitInputDateTime(val){
+  const m = String(val || "").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+  if(!m) return null;
+  return {
+    year: Number(m[1]),
+    month: Number(m[2]),
+    day: Number(m[3]),
+    hour: Number(m[4]),
+    minute: Number(m[5])
+  };
+}
+
+function utcIsoToZoneInput(iso, timeZone){
+  const parts = timePartsInZone(iso, timeZone);
+  if(!parts) return "";
+  return `${parts.year}-${pad2(parts.month)}-${pad2(parts.day)}T${pad2(parts.hour)}:${pad2(parts.minute)}`;
+}
+
+function zoneInputToUtcISO(inputVal, timeZone){
+  const target = splitInputDateTime(inputVal);
+  if(!target) return null;
+  let guessUtcMs = Date.UTC(target.year, target.month - 1, target.day, target.hour, target.minute, 0);
+  const wantedAsUtc = Date.UTC(target.year, target.month - 1, target.day, target.hour, target.minute, 0);
+
+  for(let i=0; i<5; i++){
+    const zoned = timePartsInZone(new Date(guessUtcMs), timeZone);
+    if(!zoned) return null;
+    const seenAsUtc = Date.UTC(zoned.year, zoned.month - 1, zoned.day, zoned.hour, zoned.minute, 0);
+    const diff = wantedAsUtc - seenAsUtc;
+    guessUtcMs += diff;
+    if(diff === 0) break;
+  }
+  const out = new Date(guessUtcMs);
+  return Number.isNaN(out.getTime()) ? null : out.toISOString();
+}
+
 const CONTENT_SECTIONS = [
   ["stories", "🌻 Stories"],
   ["entreDiosas", "🌻 Entre Diosas"],
@@ -4776,6 +4862,14 @@ function openBookingModal(bookingId=null, opts={}){
   })();
 
   const rec = b?.recurrence || null;
+  const getCurrentClientTz = ()=>{
+    const selectedId = b?.clientId || prefClientId || "";
+    const c = STATE.clients.find(x => String(x.id) === String(selectedId));
+    return inferTimezoneFromResidence(c?.residencePlace || "");
+  };
+  const initialClientTz = getCurrentClientTz();
+  const defaultStartHome = utcIsoToZoneInput(defaultStart, HOME_TIMEZONE);
+  const defaultStartClient = utcIsoToZoneInput(defaultStart, initialClientTz);
 
   openModal(
     isEdit ? "Editar sesión" : "Programar sesión",
@@ -4810,8 +4904,15 @@ function openBookingModal(bookingId=null, opts={}){
       </div>
 
       <div class="row">
-        <label class="label">Fecha y hora</label>
-        <input id="mBStart" type="datetime-local" class="input" value="${toInputDateTimeLocal(defaultStart)}" />
+        <label class="label">Fecha y hora (${HOME_TIMEZONE_LABEL})</label>
+        <input id="mBStartHome" type="datetime-local" class="input" value="${defaultStartHome}" />
+        <div id="mBHomeMeta" class="itemMeta">Zona fija: ${HOME_TIMEZONE}.</div>
+      </div>
+
+      <div class="row">
+        <label class="label">Fecha y hora (cliente)</label>
+        <input id="mBStartClient" type="datetime-local" class="input" value="${defaultStartClient}" />
+        <div id="mBClientTzMeta" class="itemMeta">Zona cliente: ${initialClientTz} (según residencia).</div>
       </div>
 
       <div class="row">
@@ -4871,7 +4972,7 @@ function openBookingModal(bookingId=null, opts={}){
     const clientId = $("#mBClientId").value || null;
     const client = $("#mBClient").value;
     const title = $("#mBTitle").value;
-    const startAt = parseInputDateTimeLocal($("#mBStart").value);
+    const startAt = zoneInputToUtcISO($("#mBStartHome").value, HOME_TIMEZONE);
     const durationMin = Number($("#mBDur").value || 60) || 60;
     const amount = Number($("#mBAmt").value || 0) || 0;
     const amountUsd = Number($("#mBAmtUsd").value || 0) || 0;
@@ -4893,20 +4994,64 @@ function openBookingModal(bookingId=null, opts={}){
   // Sync client selector -> text
   const sel = $("#mBClientId");
   const txt = $("#mBClient");
+  const homeInput = $("#mBStartHome");
+  const clientInput = $("#mBStartClient");
+  const clientTzMeta = $("#mBClientTzMeta");
+  let syncingTz = false;
+
+  function selectedClientTimezone_(){
+    const id = sel.value || "";
+    const c = STATE.clients.find(x=>String(x.id)===String(id));
+    return inferTimezoneFromResidence(c?.residencePlace || "");
+  }
+
+  function syncClientFromHome_(){
+    if(syncingTz) return;
+    const homeIso = zoneInputToUtcISO(homeInput.value, HOME_TIMEZONE);
+    if(!homeIso) return;
+    const clientTz = selectedClientTimezone_();
+    syncingTz = true;
+    clientInput.value = utcIsoToZoneInput(homeIso, clientTz);
+    syncingTz = false;
+  }
+
+  function syncHomeFromClient_(){
+    if(syncingTz) return;
+    const clientTz = selectedClientTimezone_();
+    const iso = zoneInputToUtcISO(clientInput.value, clientTz);
+    if(!iso) return;
+    syncingTz = true;
+    homeInput.value = utcIsoToZoneInput(iso, HOME_TIMEZONE);
+    syncingTz = false;
+  }
+
+  function refreshClientTimezoneMeta_(){
+    const tz = selectedClientTimezone_();
+    clientTzMeta.textContent = `Zona cliente: ${tz} (según residencia).`;
+  }
+
   function applyClientSelection_(){
     const id = sel.value || "";
     if(!id){
       txt.placeholder = "Ej: @maria";
+      refreshClientTimezoneMeta_();
+      syncClientFromHome_();
       return;
     }
     const c = STATE.clients.find(x=>String(x.id)===String(id));
     if(!c) return;
     const handle = c.handle ? "@"+String(c.handle).replace(/^@/,"") : "";
     txt.value = handle || c.name || txt.value;
+    refreshClientTimezoneMeta_();
+    syncClientFromHome_();
   }
   sel.addEventListener("change", applyClientSelection_);
+  homeInput.addEventListener("input", syncClientFromHome_);
+  clientInput.addEventListener("input", syncHomeFromClient_);
   // initial
   if(currentClientId && !txt.value) applyClientSelection_();
+  refreshClientTimezoneMeta_();
+  syncClientFromHome_();
 }
 
 function openReminderModal(reminderId=null){
