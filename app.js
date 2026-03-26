@@ -1049,7 +1049,9 @@ function makeTask_(title, opts={}){
     doneAt: opts.doneAt || null,
     pinnedDay: opts.pinnedDay || todayKey(),
     notes: opts.notes || "",
-    category: opts.category || "mission" // mission | plan
+    category: opts.category || "mission", // mission | plan
+    assignee: opts.assignee || "",        // fergis | carlos
+    frequency: opts.frequency || ""       // diaria | semanal | quincenal | mensual
   };
 }
 
@@ -1216,7 +1218,9 @@ function addTask(title, opts={}){
     pinnedDay: opts.pinnedDay || todayKey(),
     category: opts.category || "mission",
     notes: opts.notes || "",
-    createdAt: opts.createdAt || nowISO()
+    createdAt: opts.createdAt || nowISO(),
+    assignee: opts.assignee || "",
+    frequency: opts.frequency || ""
   });
 
   STATE.tasks.unshift(t);
@@ -3221,6 +3225,28 @@ function wire(){
           </select>
         </div>
 
+        ${isPlan ? `
+        <div class="row">
+          <label class="label">¿Quién lo hace?</label>
+          <select id="mTaskAssignee" class="input">
+            <option value="">-- Seleccionar --</option>
+            <option value="fergis">Fergis</option>
+            <option value="carlos">Carlos</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label class="label">Frecuencia</label>
+          <select id="mTaskFrequency" class="input">
+            <option value="">-- Seleccionar --</option>
+            <option value="diaria">Diaria</option>
+            <option value="semanal">Semanal</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="mensual">Mensual</option>
+          </select>
+        </div>
+        ` : ""}
+
         <div class="divider"></div>
         <div class="itemMeta">Tip: si está pesado, hazlo micro (5-10 min). Esto es estructura suave.</div>
       `,
@@ -3236,6 +3262,10 @@ function wire(){
       const cat = $("#mTaskCat").value || "mission";
       const dayInput = $("#mTaskDay");
       const day = dayInput ? (dayInput.value || todayKey()) : todayKey();
+      const assigneeEl = $("#mTaskAssignee");
+      const frequencyEl = $("#mTaskFrequency");
+      const assignee = assigneeEl ? assigneeEl.value : "";
+      const frequency = frequencyEl ? frequencyEl.value : "";
 
       if(!title){ toast("Escribe un título."); return; }
 
@@ -3244,7 +3274,7 @@ function wire(){
         if(count >= 3){ toast("Máximo 3 misiones para hoy."); return; }
       }
 
-      addTask(title, { pinnedDay: day, category: cat });
+      addTask(title, { pinnedDay: day, category: cat, assignee, frequency });
       closeModal();
     };
   }
