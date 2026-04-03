@@ -874,7 +874,7 @@ const LEVEL_THRESHOLDS = [
   { level: 8,  xp: 1400 },
   { level: 9,  xp: 1600 },
   { level: 10, xp: 1800 },
-  { level: 11, xp: 2000 }
+  { level: 11, xp: 3000 }
 ];
 
 function getExchangeRate(){
