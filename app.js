@@ -746,6 +746,7 @@ function normalizeState_(st){
     sub.observations = sub.observations || "";
     sub.invoiceImage = sub.invoiceImage || "";
     sub.invoiceImageName = sub.invoiceImageName || "";
+    normalizeInvoiceFields(sub);
   }
 
   st.oneToOneSessions = st.oneToOneSessions || {};
@@ -764,6 +765,7 @@ function normalizeState_(st){
     sess.costDolares = amountNum(sess.costDolares);
     sess.invoiceImage = sess.invoiceImage || "";
     sess.invoiceImageName = sess.invoiceImageName || "";
+    normalizeInvoiceFields(sess);
   }
 
   st.questionReadings = st.questionReadings || {};
@@ -783,6 +785,7 @@ function normalizeState_(st){
     reading.notes = reading.notes || "";
     reading.invoiceImage = reading.invoiceImage || "";
     reading.invoiceImageName = reading.invoiceImageName || "";
+    normalizeInvoiceFields(reading);
   }
 
   // Back-compat: tasks sin category -> mission
@@ -2031,6 +2034,37 @@ function sessionColumns(type){
   const t = SUBSCRIPTION_TYPES.find(x=>x.key===type) || SUBSCRIPTION_TYPES[0];
   return Array.from({ length: t.sessions }, (_,i)=> i+1);
 }
+function normalizeInvoiceFields(row){
+  const images = Array.isArray(row?.invoiceImages) ? row.invoiceImages.filter(Boolean).map(String) : [];
+  const names = Array.isArray(row?.invoiceImageNames) ? row.invoiceImageNames.filter(Boolean).map(String) : [];
+  if(row?.invoiceImage && !images.includes(String(row.invoiceImage))) images.unshift(String(row.invoiceImage));
+  if(row?.invoiceImageName && !names.includes(String(row.invoiceImageName))) names.unshift(String(row.invoiceImageName));
+  row.invoiceImages = images;
+  row.invoiceImageNames = names;
+  row.invoiceImage = images[0] || "";
+  row.invoiceImageName = names[0] || "";
+}
+
+function appendInvoiceFilesToRow(row, files){
+  const list = Array.from(files || []);
+  if(!list.length) return Promise.resolve(0);
+  return Promise.all(list.map((file) => new Promise((resolve,reject)=>{
+    const fr = new FileReader();
+    fr.onload = () => resolve({ b64: String(fr.result || ""), name: file.name || "" });
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  }).catch(()=>null))).then((results)=>{
+    normalizeInvoiceFields(row);
+    const ok = results.filter(Boolean).filter(x=>x.b64);
+    for(const item of ok){
+      row.invoiceImages.push(item.b64);
+      if(item.name) row.invoiceImageNames.push(item.name);
+    }
+    normalizeInvoiceFields(row);
+    return ok.length;
+  });
+}
+
 function renderSubscriptions(){
   const ySel = $("#subscriptionYear");
   const mSel = $("#subscriptionMonth");
@@ -2060,14 +2094,15 @@ function renderSubscriptions(){
         <td>${e.costSoles || ""}</td>
         <td>${e.costDolares || ""}</td>
         ${checks}
-        <td><input class="input small" data-act="subObservations" data-id="${e.id}" value="${escapeAttr(e.observations || "")}" /></td>
+        <td>${escapeHtml(e.observations || "")}</td>
         <td>
           <div style="display:flex;gap:8px;align-items:center">
-            <input type="file" data-act="subInvoice" data-id="${e.id}" accept="image/*" style="display:none" />
-            <button class="btn ghost" data-act="subUpload" data-id="${e.id}">${e.invoiceImage ? "Cambiar" : "Subir"}</button>
-            ${e.invoiceImage ? `<button class="btn ghost" data-act="subViewInvoice" data-id="${e.id}">Ver</button>` : `<span class="subEmpty">Sin imagen</span>`}
+            <input type="file" data-act="subInvoice" data-id="${e.id}" accept="image/*" multiple style="display:none" />
+            <button class="btn ghost" data-act="subUpload" data-id="${e.id}">Subir</button>
+            ${e.invoiceImages?.length ? `<button class="btn ghost" data-act="subViewInvoice" data-id="${e.id}">Ver (${e.invoiceImages.length})</button>` : `<span class="subEmpty">Sin imagen</span>`}
           </div>
         </td>
+        <td><button class="btn ghost" data-act="subEdit" data-id="${e.id}">✎</button></td>
         <td><button class="btn ghost" data-act="subDelete" data-id="${e.id}">🗑</button></td>
       </tr>`;
     }).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
@@ -2081,11 +2116,11 @@ function renderSubscriptions(){
         <table class="subTable">
           <thead>
             <tr>
-              <th>Fecha de pago</th><th>Nombre</th><th>Costo soles</th><th>Costo dólares</th>${headers}<th>Observaciones</th><th>Factura</th><th></th>
+              <th>Fecha de pago</th><th>Nombre</th><th>Costo soles</th><th>Costo dólares</th>${headers}<th>Notas</th><th>Factura</th><th></th><th></th>
             </tr>
           </thead>
           <tbody>${body}</tbody>
-          <tfoot><tr><td colspan="2">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="${cols.length+3}"></td></tr></tfoot>
+          <tfoot><tr><td colspan="2">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="${cols.length+4}"></td></tr></tfoot>
         </table>
       </div>
     </div>`;
@@ -2100,6 +2135,26 @@ function openImagePreviewModal(src, title="Factura"){
   );
   $("#mCloseInvoice").onclick = closeModal;
 }
+function openInvoiceGalleryModal(images, title="Facturas"){
+  const safe = (images || []).filter(Boolean);
+  if(!safe.length){ toast("No hay imágenes para mostrar."); return; }
+  openModal(
+    title,
+    `<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px">
+      ${safe.map((src,idx)=>`<button class="btn ghost" data-act="openInvoiceSingle" data-idx="${idx}" style="padding:0;border:none;background:none">
+        <img src="${src}" alt="Factura ${idx+1}" style="width:100%;max-height:180px;object-fit:cover;border-radius:10px;border:1px solid var(--line)" />
+      </button>`).join("")}
+    </div>`,
+    `<button class="btn" id="mCloseInvoiceGallery">Cerrar</button>`
+  );
+  $("#mCloseInvoiceGallery").onclick = closeModal;
+  $("#modalBody").onclick = (e)=>{
+    const btn = e.target.closest("button[data-act='openInvoiceSingle']");
+    if(!btn) return;
+    const idx = Number(btn.dataset.idx || 0);
+    openImagePreviewModal(safe[idx], `${title} · ${idx+1}/${safe.length}`);
+  };
+}
 
 function addSubscription(obj={}){
   const entry = {
@@ -2113,8 +2168,11 @@ function addSubscription(obj={}){
     observations: (obj.observations || "").trim(),
     invoiceImage: obj.invoiceImage || "",
     invoiceImageName: obj.invoiceImageName || "",
+    invoiceImages: Array.isArray(obj.invoiceImages) ? obj.invoiceImages : (obj.invoiceImage ? [obj.invoiceImage] : []),
+    invoiceImageNames: Array.isArray(obj.invoiceImageNames) ? obj.invoiceImageNames : (obj.invoiceImageName ? [obj.invoiceImageName] : []),
     createdAt: nowISO()
   };
+  normalizeInvoiceFields(entry);
   STATE.subscriptions.entries.unshift(entry);
   enqueueEvent("subscription_add", entry);
   saveState();
@@ -2140,26 +2198,26 @@ function openSubscriptionModal(){
     </div>
     <div class="row"><label class="label">Costo soles</label><input id="mSubSoles" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Costo dólares</label><input id="mSubDol" type="number" class="input" min="0" step="0.01" /></div>
-    <div class="row"><label class="label">Observaciones</label><input id="mSubObs" class="input" /></div>
-    <div class="row"><label class="label">Factura (imagen)</label><input id="mSubInvoice" type="file" class="input" accept="image/*" /></div>`,
+    <div class="row"><label class="label">Notas</label><input id="mSubObs" class="input" /></div>
+    <div class="row"><label class="label">Factura (imagen)</label><input id="mSubInvoice" type="file" class="input" accept="image/*" multiple /></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
   const subNameEl = $("#mSubName");
   $("#mSave").onclick = async () => {
-    const file = $("#mSubInvoice")?.files?.[0];
-    let invoiceImage = "";
-    let invoiceImageName = "";
-    if(file){
+    const files = $("#mSubInvoice")?.files || [];
+    const invoiceImages = [];
+    const invoiceImageNames = [];
+    for(const file of files){
       const b64 = await new Promise((resolve,reject)=>{
         const fr = new FileReader();
         fr.onload = () => resolve(fr.result);
         fr.onerror = reject;
         fr.readAsDataURL(file);
       }).catch(()=>null);
-      if(!b64){ toast("No pude leer la imagen."); return; }
-      invoiceImage = String(b64);
-      invoiceImageName = file.name || "";
+      if(!b64){ toast("No pude leer una imagen."); return; }
+      invoiceImages.push(String(b64));
+      if(file.name) invoiceImageNames.push(file.name);
     }
     const selectedClient = STATE.clients.find(c => String(c.id) === String(subNameEl?.value || ""));
     const selectedClientName = (selectedClient?.name || selectedClient?.handle || "").trim();
@@ -2170,8 +2228,8 @@ function openSubscriptionModal(){
       costSoles: $("#mSubSoles").value,
       costDolares: $("#mSubDol").value,
       observations: $("#mSubObs").value,
-      invoiceImage,
-      invoiceImageName
+      invoiceImages,
+      invoiceImageNames
     });
     closeModal();
   };
@@ -2200,17 +2258,18 @@ function renderOneToOneSessions(){
       <td>${escapeHtml(e.consultant || "")}</td>
       <td>${escapeHtml(e.contact || "")}</td>
       <td>${e.birthDate ? escapeHtml(new Date(`${e.birthDate}T00:00:00`).toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })) : ""}</td>
-      <td><input class="input small" data-act="s11SessionType" data-id="${e.id}" value="${escapeAttr(e.sessionType || "")}" /></td>
-      <td><input class="input small" data-act="s11Modality" data-id="${e.id}" value="${escapeAttr(e.modality || "")}" /></td>
+      <td>${escapeHtml(e.sessionType || "")}</td>
+      <td>${escapeHtml(e.modality || "")}</td>
       <td>${e.costSoles || ""}</td>
       <td>${e.costDolares || ""}</td>
       <td>
         <div style="display:flex;gap:8px;align-items:center">
-          <input type="file" data-act="s11Invoice" data-id="${e.id}" accept="image/*" style="display:none" />
-          <button class="btn ghost" data-act="s11Upload" data-id="${e.id}">${e.invoiceImage ? "Cambiar" : "Subir"}</button>
-          ${e.invoiceImage ? `<button class="btn ghost" data-act="s11ViewInvoice" data-id="${e.id}">Ver</button>` : `<span class="subEmpty">Sin imagen</span>`}
+          <input type="file" data-act="s11Invoice" data-id="${e.id}" accept="image/*" multiple style="display:none" />
+          <button class="btn ghost" data-act="s11Upload" data-id="${e.id}">Subir</button>
+          ${e.invoiceImages?.length ? `<button class="btn ghost" data-act="s11ViewInvoice" data-id="${e.id}">Ver (${e.invoiceImages.length})</button>` : `<span class="subEmpty">Sin imagen</span>`}
         </div>
       </td>
+      <td><button class="btn ghost" data-act="s11Edit" data-id="${e.id}">✎</button></td>
       <td><button class="btn ghost" data-act="s11Delete" data-id="${e.id}">🗑</button></td>
     </tr>`).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
 
@@ -2223,11 +2282,11 @@ function renderOneToOneSessions(){
       <table class="subTable">
         <thead>
           <tr>
-            <th>Fecha</th><th>Consultante</th><th>Contacto</th><th>Fecha de nacimiento</th><th>Tipo de sesión</th><th>Modalidad</th><th>Costo en soles</th><th>Costo en dólares</th><th>Factura</th><th></th>
+            <th>Fecha</th><th>Consultante</th><th>Contacto</th><th>Fecha de nacimiento</th><th>Tipo de sesión</th><th>Modalidad</th><th>Costo en soles</th><th>Costo en dólares</th><th>Factura</th><th></th><th></th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
-        <tfoot><tr><td colspan="6">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="2"></td></tr></tfoot>
+        <tfoot><tr><td colspan="6">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="3"></td></tr></tfoot>
       </table>
     </div>
   </div>`;
@@ -2246,8 +2305,11 @@ function addOneToOneSession(obj={}){
     costDolares: amountNum(obj.costDolares),
     invoiceImage: obj.invoiceImage || "",
     invoiceImageName: obj.invoiceImageName || "",
+    invoiceImages: Array.isArray(obj.invoiceImages) ? obj.invoiceImages : (obj.invoiceImage ? [obj.invoiceImage] : []),
+    invoiceImageNames: Array.isArray(obj.invoiceImageNames) ? obj.invoiceImageNames : (obj.invoiceImageName ? [obj.invoiceImageName] : []),
     createdAt: nowISO()
   };
+  normalizeInvoiceFields(entry);
   STATE.oneToOneSessions.entries.unshift(entry);
   enqueueEvent("session11_add", entry);
   saveState();
@@ -2276,7 +2338,7 @@ function openOneToOneSessionModal(){
     <div class="row"><label class="label">Modalidad</label><input id="mS11Modality" class="input" placeholder="Escribe libremente" /></div>
     <div class="row"><label class="label">Costo en soles</label><input id="mS11Soles" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Costo en dólares</label><input id="mS11Dol" type="number" class="input" min="0" step="0.01" /></div>
-    <div class="row"><label class="label">Factura (imagen)</label><input id="mS11Invoice" type="file" class="input" accept="image/*" /></div>`,
+    <div class="row"><label class="label">Factura (imagen)</label><input id="mS11Invoice" type="file" class="input" accept="image/*" multiple /></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
   $("#mCancel").onclick = closeModal;
@@ -2295,19 +2357,19 @@ function openOneToOneSessionModal(){
   };
   s11ConsultantEl?.addEventListener("change", syncOneToOneClientData);
   $("#mSave").onclick = async () => {
-    const file = $("#mS11Invoice")?.files?.[0];
-    let invoiceImage = "";
-    let invoiceImageName = "";
-    if(file){
+    const files = $("#mS11Invoice")?.files || [];
+    const invoiceImages = [];
+    const invoiceImageNames = [];
+    for(const file of files){
       const b64 = await new Promise((resolve,reject)=>{
         const fr = new FileReader();
         fr.onload = () => resolve(fr.result);
         fr.onerror = reject;
         fr.readAsDataURL(file);
       }).catch(()=>null);
-      if(!b64){ toast("No pude leer la imagen."); return; }
-      invoiceImage = String(b64);
-      invoiceImageName = file.name || "";
+      if(!b64){ toast("No pude leer una imagen."); return; }
+      invoiceImages.push(String(b64));
+      if(file.name) invoiceImageNames.push(file.name);
     }
     const selectedClient = STATE.clients.find(c => String(c.id) === String(s11ConsultantEl?.value || ""));
     const selectedClientName = (selectedClient?.name || selectedClient?.handle || "").trim();
@@ -2320,8 +2382,8 @@ function openOneToOneSessionModal(){
       modality: $("#mS11Modality").value,
       costSoles: $("#mS11Soles").value,
       costDolares: $("#mS11Dol").value,
-      invoiceImage,
-      invoiceImageName
+      invoiceImages,
+      invoiceImageNames
     });
     closeModal();
   };
@@ -2349,17 +2411,18 @@ function renderQuestionReadings(){
       <td>${escapeHtml(new Date(`${e.date}T00:00:00`).toLocaleDateString('es-PE', { day:'numeric', month:'long', year:'numeric' }))}</td>
       <td>${escapeHtml(e.consultant || "")}</td>
       <td>${e.birthDate ? escapeHtml(new Date(`${e.birthDate}T00:00:00`).toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })) : ""}</td>
-      <td><input class="input small" type="number" min="0" data-act="qrQuestionsCount" data-id="${e.id}" value="${Number(e.questionsCount || 0)}" /></td>
-      <td><input class="input small" type="number" min="0" step="0.01" data-act="qrCostSoles" data-id="${e.id}" value="${Number(e.costSoles || e.cost || 0)}" /></td>
-      <td><input class="input small" type="number" min="0" step="0.01" data-act="qrCostDolares" data-id="${e.id}" value="${Number(e.costDolares || 0)}" /></td>
-      <td><input class="input small" data-act="qrNotes" data-id="${e.id}" value="${escapeAttr(e.notes || "")}" placeholder="Notas" /></td>
+      <td>${Number(e.questionsCount || 0)}</td>
+      <td>${Number(e.costSoles || e.cost || 0)}</td>
+      <td>${Number(e.costDolares || 0)}</td>
+      <td>${escapeHtml(e.notes || "")}</td>
       <td>
         <div class="invoiceActions">
-          <input type="file" data-act="qrInvoice" data-id="${e.id}" accept="image/*" style="display:none" />
-          <button class="btn ghost" data-act="qrUpload" data-id="${e.id}">${e.invoiceImage ? "Cambiar" : "Subir"}</button>
-          ${e.invoiceImage ? `<button class="btn ghost" data-act="qrViewInvoice" data-id="${e.id}">Ver</button>` : `<span class="subEmpty">Sin imagen</span>`}
+          <input type="file" data-act="qrInvoice" data-id="${e.id}" accept="image/*" multiple style="display:none" />
+          <button class="btn ghost" data-act="qrUpload" data-id="${e.id}">Subir</button>
+          ${e.invoiceImages?.length ? `<button class="btn ghost" data-act="qrViewInvoice" data-id="${e.id}">Ver (${e.invoiceImages.length})</button>` : `<span class="subEmpty">Sin imagen</span>`}
         </div>
       </td>
+      <td><button class="btn ghost" data-act="qrEdit" data-id="${e.id}">✎</button></td>
       <td><button class="btn ghost" data-act="qrDelete" data-id="${e.id}">🗑</button></td>
     </tr>`).join("") : `<tr><td colspan="99" class="subEmpty">No hay registros para este mes.</td></tr>`;
 
@@ -2372,11 +2435,11 @@ function renderQuestionReadings(){
       <table class="subTable">
         <thead>
           <tr>
-            <th>Fecha</th><th>Nombre de consultante</th><th>Fecha de nacimiento</th><th>Cantidad de preguntas</th><th>Costo en soles</th><th>Costo en dólares</th><th>Notas</th><th>Factura</th><th></th>
+            <th>Fecha</th><th>Nombre de consultante</th><th>Fecha de nacimiento</th><th>Cantidad de preguntas</th><th>Costo en soles</th><th>Costo en dólares</th><th>Notas</th><th>Factura</th><th></th><th></th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
-        <tfoot><tr><td colspan="4">Totales</td><td>${totalSoles}</td><td>${totalDolares}</td><td colspan="3"></td></tr></tfoot>
+        <tfoot><tr><td colspan="4">Totales</td><td>${totalSoles}</td><td>${totalDolares}</td><td colspan="4"></td></tr></tfoot>
       </table>
     </div>
   </div>`;
@@ -2394,8 +2457,11 @@ function addQuestionReading(obj={}){
     notes: obj.notes || "",
     invoiceImage: obj.invoiceImage || "",
     invoiceImageName: obj.invoiceImageName || "",
+    invoiceImages: Array.isArray(obj.invoiceImages) ? obj.invoiceImages : (obj.invoiceImage ? [obj.invoiceImage] : []),
+    invoiceImageNames: Array.isArray(obj.invoiceImageNames) ? obj.invoiceImageNames : (obj.invoiceImageName ? [obj.invoiceImageName] : []),
     createdAt: nowISO()
   };
+  normalizeInvoiceFields(entry);
   entry.cost = entry.costSoles;
   STATE.questionReadings.entries.unshift(entry);
   enqueueEvent("question_reading_add", entry);
@@ -2423,7 +2489,7 @@ function openQuestionReadingModal(){
     <div class="row"><label class="label">Cantidad de preguntas</label><input id="mQrQuestionsCount" type="number" class="input" min="0" step="1" /></div>
     <div class="row"><label class="label">Costo en soles</label><input id="mQrCostSoles" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Costo en dólares</label><input id="mQrCostDolares" type="number" class="input" min="0" step="0.01" /></div>
-    <div class="row"><label class="label">Imagen de factura</label><input id="mQrInvoice" type="file" class="input" accept="image/*" /></div>
+    <div class="row"><label class="label">Imagen de factura</label><input id="mQrInvoice" type="file" class="input" accept="image/*" multiple /></div>
     <div class="row"><label class="label">Notas</label><textarea id="mQrNotes" class="input" rows="3" placeholder="Apunta info adicional"></textarea></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar</button>`
   );
@@ -2436,19 +2502,19 @@ function openQuestionReadingModal(){
   };
   qrConsultantEl?.addEventListener("change", syncQuestionReadingClientData);
   $("#mSave").onclick = async () => {
-    const file = $("#mQrInvoice")?.files?.[0];
-    let invoiceImage = "";
-    let invoiceImageName = "";
-    if(file){
+    const files = $("#mQrInvoice")?.files || [];
+    const invoiceImages = [];
+    const invoiceImageNames = [];
+    for(const file of files){
       const b64 = await new Promise((resolve,reject)=>{
         const fr = new FileReader();
         fr.onload = () => resolve(fr.result);
         fr.onerror = reject;
         fr.readAsDataURL(file);
       }).catch(()=>null);
-      if(!b64){ toast("No pude leer la imagen."); return; }
-      invoiceImage = String(b64);
-      invoiceImageName = file.name || "";
+      if(!b64){ toast("No pude leer una imagen."); return; }
+      invoiceImages.push(String(b64));
+      if(file.name) invoiceImageNames.push(file.name);
     }
     const selectedClient = STATE.clients.find(c => String(c.id) === String(qrConsultantEl?.value || ""));
     const selectedClientName = (selectedClient?.name || selectedClient?.handle || "").trim();
@@ -2460,9 +2526,95 @@ function openQuestionReadingModal(){
       costSoles: $("#mQrCostSoles").value,
       costDolares: $("#mQrCostDolares").value,
       notes: $("#mQrNotes").value,
-      invoiceImage,
-      invoiceImageName
+      invoiceImages,
+      invoiceImageNames
     });
+    closeModal();
+  };
+}
+
+function openSubscriptionEditModal(entry){
+  if(!entry) return;
+  openModal(
+    "Editar registro de suscripción",
+    `<div class="row"><label class="label">Fecha de pago</label><input id="mEditSubDate" type="date" class="input" value="${escapeAttr(entry.paymentDate || todayKey())}" /></div>
+    <div class="row"><label class="label">Nombre</label><input id="mEditSubName" class="input" value="${escapeAttr(entry.name || "")}" /></div>
+    <div class="row"><label class="label">Costo soles</label><input id="mEditSubSoles" type="number" class="input" min="0" step="0.01" value="${Number(entry.costSoles || 0)}" /></div>
+    <div class="row"><label class="label">Costo dólares</label><input id="mEditSubDol" type="number" class="input" min="0" step="0.01" value="${Number(entry.costDolares || 0)}" /></div>
+    <div class="row"><label class="label">Notas</label><textarea id="mEditSubNotes" class="input" rows="3">${escapeHtml(entry.observations || "")}</textarea></div>`,
+    `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar cambios</button>`
+  );
+  $("#mCancel").onclick = closeModal;
+  $("#mSave").onclick = () => {
+    entry.paymentDate = $("#mEditSubDate").value || todayKey();
+    entry.name = ($("#mEditSubName").value || "").trim();
+    entry.costSoles = amountNum($("#mEditSubSoles").value);
+    entry.costDolares = amountNum($("#mEditSubDol").value);
+    entry.observations = ($("#mEditSubNotes").value || "").trim();
+    saveState();
+    renderSubscriptions();
+    renderFinance();
+    closeModal();
+  };
+}
+
+function openOneToOneEditModal(entry){
+  if(!entry) return;
+  openModal(
+    "Editar sesión 1:1",
+    `<div class="row"><label class="label">Fecha</label><input id="mEditS11Date" type="date" class="input" value="${escapeAttr(entry.date || todayKey())}" /></div>
+    <div class="row"><label class="label">Consultante</label><input id="mEditS11Consultant" class="input" value="${escapeAttr(entry.consultant || "")}" /></div>
+    <div class="row"><label class="label">Contacto</label><input id="mEditS11Contact" class="input" value="${escapeAttr(entry.contact || "")}" /></div>
+    <div class="row"><label class="label">Fecha de nacimiento</label><input id="mEditS11BirthDate" type="date" class="input" value="${escapeAttr(entry.birthDate || "")}" /></div>
+    <div class="row"><label class="label">Tipo de sesión</label><input id="mEditS11SessionType" class="input" value="${escapeAttr(entry.sessionType || "")}" /></div>
+    <div class="row"><label class="label">Modalidad</label><input id="mEditS11Modality" class="input" value="${escapeAttr(entry.modality || "")}" /></div>
+    <div class="row"><label class="label">Costo soles</label><input id="mEditS11Soles" type="number" class="input" min="0" step="0.01" value="${Number(entry.costSoles || 0)}" /></div>
+    <div class="row"><label class="label">Costo dólares</label><input id="mEditS11Dol" type="number" class="input" min="0" step="0.01" value="${Number(entry.costDolares || 0)}" /></div>`,
+    `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar cambios</button>`
+  );
+  $("#mCancel").onclick = closeModal;
+  $("#mSave").onclick = () => {
+    entry.date = $("#mEditS11Date").value || todayKey();
+    entry.consultant = ($("#mEditS11Consultant").value || "").trim();
+    entry.contact = ($("#mEditS11Contact").value || "").trim();
+    entry.birthDate = $("#mEditS11BirthDate").value || "";
+    entry.sessionType = ($("#mEditS11SessionType").value || "").trim();
+    entry.modality = ($("#mEditS11Modality").value || "").trim();
+    entry.costSoles = amountNum($("#mEditS11Soles").value);
+    entry.costDolares = amountNum($("#mEditS11Dol").value);
+    saveState();
+    renderOneToOneSessions();
+    renderFinance();
+    closeModal();
+  };
+}
+
+function openQuestionReadingEditModal(entry){
+  if(!entry) return;
+  openModal(
+    "Editar lectura por preguntas",
+    `<div class="row"><label class="label">Fecha</label><input id="mEditQrDate" type="date" class="input" value="${escapeAttr(entry.date || todayKey())}" /></div>
+    <div class="row"><label class="label">Consultante</label><input id="mEditQrConsultant" class="input" value="${escapeAttr(entry.consultant || "")}" /></div>
+    <div class="row"><label class="label">Fecha de nacimiento</label><input id="mEditQrBirthDate" type="date" class="input" value="${escapeAttr(entry.birthDate || "")}" /></div>
+    <div class="row"><label class="label">Cantidad de preguntas</label><input id="mEditQrQuestionsCount" type="number" class="input" min="0" step="1" value="${Number(entry.questionsCount || 0)}" /></div>
+    <div class="row"><label class="label">Costo soles</label><input id="mEditQrCostSoles" type="number" class="input" min="0" step="0.01" value="${Number(entry.costSoles || 0)}" /></div>
+    <div class="row"><label class="label">Costo dólares</label><input id="mEditQrCostDolares" type="number" class="input" min="0" step="0.01" value="${Number(entry.costDolares || 0)}" /></div>
+    <div class="row"><label class="label">Notas</label><textarea id="mEditQrNotes" class="input" rows="3">${escapeHtml(entry.notes || "")}</textarea></div>`,
+    `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar cambios</button>`
+  );
+  $("#mCancel").onclick = closeModal;
+  $("#mSave").onclick = () => {
+    entry.date = $("#mEditQrDate").value || todayKey();
+    entry.consultant = ($("#mEditQrConsultant").value || "").trim();
+    entry.birthDate = $("#mEditQrBirthDate").value || "";
+    entry.questionsCount = Number($("#mEditQrQuestionsCount").value || 0) || 0;
+    entry.costSoles = amountNum($("#mEditQrCostSoles").value);
+    entry.costDolares = amountNum($("#mEditQrCostDolares").value);
+    entry.cost = entry.costSoles;
+    entry.notes = ($("#mEditQrNotes").value || "").trim();
+    saveState();
+    renderQuestionReadings();
+    renderFinance();
     closeModal();
   };
 }
@@ -2668,7 +2820,7 @@ function renderClients(){
     return;
   }
 
-  list.innerHTML = items.slice(0,10).map(c => {
+  list.innerHTML = items.map(c => {
     const name = c.name || c.handle || "(sin nombre)";
     const phone = (c.phone || "").trim();
     const phoneLabel = phone || "Sin teléfono";
@@ -3874,42 +4026,31 @@ function wire(){
       return;
     }
     if(t.dataset.act === "subInvoice"){
-      const file = t.files?.[0];
-      if(!file) return;
-      const b64 = await new Promise((resolve,reject)=>{
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result);
-        fr.onerror = reject;
-        fr.readAsDataURL(file);
-      }).catch(()=>null);
-      if(!b64){ toast("No pude leer la imagen."); return; }
-      row.invoiceImage = String(b64);
-      row.invoiceImageName = file.name || "";
-      enqueueEvent("subscription_invoice", { id, invoiceImageName: row.invoiceImageName });
+      const uploaded = await appendInvoiceFilesToRow(row, t.files || []);
+      if(!uploaded){ toast("No pude leer las imágenes."); return; }
+      enqueueEvent("subscription_invoice", { id, invoiceImageName: row.invoiceImageNames?.[0] || "" });
       saveState();
       renderSubscriptions();
       renderFinance();
     }
   });
-  $("#subscriptionBoards")?.addEventListener("input", (e) => {
-    const t = e.target;
-    if(t.dataset.act !== "subObservations") return;
-    const row = STATE.subscriptions.entries.find(x=>x.id===t.dataset.id);
-    if(!row) return;
-    row.observations = t.value;
-    saveState();
-  });
   $("#subscriptionBoards")?.addEventListener("click", (e) => {
     const viewBtn = e.target.closest("button[data-act='subViewInvoice']");
     if(viewBtn){
       const row = STATE.subscriptions.entries.find(x=>x.id===viewBtn.dataset.id);
-      if(row?.invoiceImage) openImagePreviewModal(row.invoiceImage, `Factura · ${row.name || "registro"}`);
+      if(row?.invoiceImages?.length) openInvoiceGalleryModal(row.invoiceImages, `Facturas · ${row.name || "registro"}`);
       return;
     }
     const uploadBtn = e.target.closest("button[data-act='subUpload']");
     if(uploadBtn){
       const fileInput = document.querySelector(`input[data-act='subInvoice'][data-id='${uploadBtn.dataset.id}']`);
       fileInput?.click();
+      return;
+    }
+    const editBtn = e.target.closest("button[data-act='subEdit']");
+    if(editBtn){
+      const row = STATE.subscriptions.entries.find(x=>x.id===editBtn.dataset.id);
+      openSubscriptionEditModal(row);
       return;
     }
     const btn = e.target.closest("button[data-act='subDelete']");
@@ -3928,42 +4069,30 @@ function wire(){
     const row = STATE.oneToOneSessions.entries.find(x=>x.id===id);
     if(!row) return;
     if(t.dataset.act === "s11Invoice"){
-      const file = t.files?.[0];
-      if(!file) return;
-      const b64 = await new Promise((resolve,reject)=>{
-        const fr = new FileReader();
-        fr.onload = () => resolve(fr.result);
-        fr.onerror = reject;
-        fr.readAsDataURL(file);
-      }).catch(()=>null);
-      if(!b64){ toast("No pude leer la imagen."); return; }
-      row.invoiceImage = String(b64);
-      row.invoiceImageName = file.name || "";
-      enqueueEvent("session11_invoice", { id, invoiceImageName: row.invoiceImageName });
+      const uploaded = await appendInvoiceFilesToRow(row, t.files || []);
+      if(!uploaded){ toast("No pude leer las imágenes."); return; }
+      enqueueEvent("session11_invoice", { id, invoiceImageName: row.invoiceImageNames?.[0] || "" });
       saveState();
       renderOneToOneSessions();
     }
-  });
-  $("#oneToOneBoards")?.addEventListener("input", (e) => {
-    const t = e.target;
-    if(!["s11SessionType", "s11Modality"].includes(t.dataset.act)) return;
-    const row = STATE.oneToOneSessions.entries.find(x=>x.id===t.dataset.id);
-    if(!row) return;
-    if(t.dataset.act === "s11SessionType") row.sessionType = t.value;
-    if(t.dataset.act === "s11Modality") row.modality = t.value;
-    saveState();
   });
   $("#oneToOneBoards")?.addEventListener("click", (e) => {
     const viewBtn = e.target.closest("button[data-act='s11ViewInvoice']");
     if(viewBtn){
       const row = STATE.oneToOneSessions.entries.find(x=>x.id===viewBtn.dataset.id);
-      if(row?.invoiceImage) openImagePreviewModal(row.invoiceImage, `Factura · ${row.consultant || "sesión"}`);
+      if(row?.invoiceImages?.length) openInvoiceGalleryModal(row.invoiceImages, `Facturas · ${row.consultant || "sesión"}`);
       return;
     }
     const uploadBtn = e.target.closest("button[data-act='s11Upload']");
     if(uploadBtn){
       const fileInput = document.querySelector(`input[data-act='s11Invoice'][data-id='${uploadBtn.dataset.id}']`);
       fileInput?.click();
+      return;
+    }
+    const editBtn = e.target.closest("button[data-act='s11Edit']");
+    if(editBtn){
+      const row = STATE.oneToOneSessions.entries.find(x=>x.id===editBtn.dataset.id);
+      openOneToOneEditModal(row);
       return;
     }
     const delBtn = e.target.closest("button[data-act='s11Delete']");
@@ -3981,51 +4110,29 @@ function wire(){
     const id = t.dataset.id;
     const row = STATE.questionReadings.entries.find(x=>x.id===id);
     if(!row) return;
-    const file = t.files?.[0];
-    if(!file) return;
-    const b64 = await new Promise((resolve,reject)=>{
-      const fr = new FileReader();
-      fr.onload = () => resolve(fr.result);
-      fr.onerror = reject;
-      fr.readAsDataURL(file);
-    }).catch(()=>null);
-    if(!b64){ toast("No pude leer la imagen."); return; }
-    row.invoiceImage = String(b64);
-    row.invoiceImageName = file.name || "";
-    enqueueEvent("question_reading_invoice", { id, invoiceImageName: row.invoiceImageName });
+    const uploaded = await appendInvoiceFilesToRow(row, t.files || []);
+    if(!uploaded){ toast("No pude leer las imágenes."); return; }
+    enqueueEvent("question_reading_invoice", { id, invoiceImageName: row.invoiceImageNames?.[0] || "" });
     saveState();
     renderQuestionReadings();
-  });
-
-  $("#questionReadingsBoard")?.addEventListener("input", (e) => {
-    const t = e.target;
-    if(!["qrQuestionsCount", "qrCostSoles", "qrCostDolares", "qrNotes"].includes(t.dataset.act)) return;
-    const row = STATE.questionReadings.entries.find(x=>x.id===t.dataset.id);
-    if(!row) return;
-    if(t.dataset.act === "qrQuestionsCount") row.questionsCount = Number(t.value || 0) || 0;
-    if(t.dataset.act === "qrCostSoles"){
-      row.costSoles = amountNum(t.value);
-      row.cost = row.costSoles;
-    }
-    if(t.dataset.act === "qrCostDolares") row.costDolares = amountNum(t.value);
-    if(t.dataset.act === "qrNotes") row.notes = t.value;
-    saveState();
-    if(["qrCostSoles", "qrCostDolares"].includes(t.dataset.act)){
-      renderQuestionReadings();
-      renderFinance();
-    }
   });
   $("#questionReadingsBoard")?.addEventListener("click", (e) => {
     const viewBtn = e.target.closest("button[data-act='qrViewInvoice']");
     if(viewBtn){
       const row = STATE.questionReadings.entries.find(x=>x.id===viewBtn.dataset.id);
-      if(row?.invoiceImage) openImagePreviewModal(row.invoiceImage, `Factura · ${row.consultant || "lectura"}`);
+      if(row?.invoiceImages?.length) openInvoiceGalleryModal(row.invoiceImages, `Facturas · ${row.consultant || "lectura"}`);
       return;
     }
     const uploadBtn = e.target.closest("button[data-act='qrUpload']");
     if(uploadBtn){
       const fileInput = document.querySelector(`input[data-act='qrInvoice'][data-id='${uploadBtn.dataset.id}']`);
       fileInput?.click();
+      return;
+    }
+    const editBtn = e.target.closest("button[data-act='qrEdit']");
+    if(editBtn){
+      const row = STATE.questionReadings.entries.find(x=>x.id===editBtn.dataset.id);
+      openQuestionReadingEditModal(row);
       return;
     }
     const delBtn = e.target.closest("button[data-act='qrDelete']");
