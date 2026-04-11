@@ -460,10 +460,25 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
    FOOTER
 ══════════════════════════════════ */
 .footer {
-  padding: 12px 20px; border-top: 1px solid var(--line);
-  background: rgba(254,250,244,.85);
-  display: flex; align-items: center; justify-content: space-between;
-  color: var(--muted); font-size: 12px; letter-spacing: .02em;
+  padding: 12px 20px;
+  border-top: 1px solid var(--line);
+  background: rgba(254,250,244,.9);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 8px 14px;
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .02em;
+}
+
+.watermark {
+  grid-column: 1 / -1;
+  text-align: center;
+  color: var(--text2);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
 }
 
 .watermark {
@@ -751,3 +766,12 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
 }
 .heroImageRemove:hover { background: rgba(184,92,79,.15); }
 .hidden { display: none !important; }
+
+@media (max-width: 640px) {
+  .footer {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+  .footRight { justify-self: start; }
+  .watermark { text-align: left; }
+}
