@@ -466,6 +466,16 @@ select.input optgroup { color: var(--text); background: #FDF8F0; }
   color: var(--muted); font-size: 12px; letter-spacing: .02em;
 }
 
+.watermark {
+  text-align: center;
+  padding: 8px 20px 16px;
+  color: color-mix(in srgb, var(--muted) 78%, #fff 22%);
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  opacity: .9;
+}
+
 /* ══════════════════════════════════
    MODAL
 ══════════════════════════════════ */
