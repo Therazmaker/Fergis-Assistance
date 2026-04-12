@@ -2609,9 +2609,9 @@ function openOneToOneEditModal(entry){
     <div class="row"><label class="label">Fecha de nacimiento</label><input id="mEditS11BirthDate" type="date" class="input" value="${escapeAttr(entry.birthDate || "")}" /></div>
     <div class="row"><label class="label">Tipo de sesión</label><input id="mEditS11SessionType" class="input" value="${escapeAttr(entry.sessionType || "")}" /></div>
     <div class="row"><label class="label">Modalidad</label><input id="mEditS11Modality" class="input" value="${escapeAttr(entry.modality || "")}" /></div>
-    <div class="row"><label class="label">Notas</label><textarea id="mEditS11Notes" class="input" rows="3">${escapeHtml(entry.notes || "")}</textarea></div>
     <div class="row"><label class="label">Costo soles</label><input id="mEditS11Soles" type="number" class="input" min="0" step="0.01" value="${Number(entry.costSoles || 0)}" /></div>
-    <div class="row"><label class="label">Costo dólares</label><input id="mEditS11Dol" type="number" class="input" min="0" step="0.01" value="${Number(entry.costDolares || 0)}" /></div>`,
+    <div class="row"><label class="label">Costo dólares</label><input id="mEditS11Dol" type="number" class="input" min="0" step="0.01" value="${Number(entry.costDolares || 0)}" /></div>
+    <div class="row"><label class="label">Notas</label><textarea id="mEditS11Notes" class="input" rows="3">${escapeHtml(entry.notes || "")}</textarea></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar cambios</button>`
   );
   $("#mCancel").onclick = closeModal;
