@@ -761,6 +761,7 @@ function normalizeState_(st){
     sess.birthDate = sess.birthDate || "";
     sess.sessionType = (sess.sessionType || "").trim();
     sess.modality = (sess.modality || "").trim();
+    sess.notes = (sess.notes || "").trim();
     sess.costSoles = amountNum(sess.costSoles);
     sess.costDolares = amountNum(sess.costDolares);
     sess.invoiceImage = sess.invoiceImage || "";
@@ -2260,6 +2261,7 @@ function renderOneToOneSessions(){
       <td>${e.birthDate ? escapeHtml(new Date(`${e.birthDate}T00:00:00`).toLocaleDateString('es-PE', { day:'2-digit', month:'2-digit', year:'numeric' })) : ""}</td>
       <td>${escapeHtml(e.sessionType || "")}</td>
       <td>${escapeHtml(e.modality || "")}</td>
+      <td>${escapeHtml(e.notes || "")}</td>
       <td>${e.costSoles || ""}</td>
       <td>${e.costDolares || ""}</td>
       <td>
@@ -2282,11 +2284,11 @@ function renderOneToOneSessions(){
       <table class="subTable">
         <thead>
           <tr>
-            <th>Fecha</th><th>Consultante</th><th>Contacto</th><th>Fecha de nacimiento</th><th>Tipo de sesión</th><th>Modalidad</th><th>Costo en soles</th><th>Costo en dólares</th><th>Factura</th><th></th><th></th>
+            <th>Fecha</th><th>Consultante</th><th>Contacto</th><th>Fecha de nacimiento</th><th>Tipo de sesión</th><th>Modalidad</th><th>Notas</th><th>Costo en soles</th><th>Costo en dólares</th><th>Factura</th><th></th><th></th>
           </tr>
         </thead>
         <tbody>${body}</tbody>
-        <tfoot><tr><td colspan="6">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="3"></td></tr></tfoot>
+        <tfoot><tr><td colspan="7">Totales</td><td>${totalS}</td><td>${totalD}</td><td colspan="3"></td></tr></tfoot>
       </table>
     </div>
   </div>`;
@@ -2301,6 +2303,7 @@ function addOneToOneSession(obj={}){
     birthDate: obj.birthDate || "",
     sessionType: (obj.sessionType || "").trim(),
     modality: (obj.modality || "").trim(),
+    notes: (obj.notes || "").trim(),
     costSoles: amountNum(obj.costSoles),
     costDolares: amountNum(obj.costDolares),
     invoiceImage: obj.invoiceImage || "",
@@ -2336,6 +2339,7 @@ function openOneToOneSessionModal(){
     <div class="row"><label class="label">Fecha de nacimiento</label><input id="mS11BirthDate" type="date" class="input" /></div>
     <div class="row"><label class="label">Tipo de sesión</label><input id="mS11SessionType" class="input" placeholder="Escribe libremente" /></div>
     <div class="row"><label class="label">Modalidad</label><input id="mS11Modality" class="input" placeholder="Escribe libremente" /></div>
+    <div class="row"><label class="label">Notas</label><textarea id="mS11Notes" class="input" rows="3" placeholder="Resumen o detalles de la sesión"></textarea></div>
     <div class="row"><label class="label">Costo en soles</label><input id="mS11Soles" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Costo en dólares</label><input id="mS11Dol" type="number" class="input" min="0" step="0.01" /></div>
     <div class="row"><label class="label">Factura (imagen)</label><input id="mS11Invoice" type="file" class="input" accept="image/*" multiple /></div>`,
@@ -2380,6 +2384,7 @@ function openOneToOneSessionModal(){
       birthDate: $("#mS11BirthDate").value,
       sessionType: $("#mS11SessionType").value,
       modality: $("#mS11Modality").value,
+      notes: $("#mS11Notes").value,
       costSoles: $("#mS11Soles").value,
       costDolares: $("#mS11Dol").value,
       invoiceImages,
@@ -2568,6 +2573,7 @@ function openOneToOneEditModal(entry){
     <div class="row"><label class="label">Fecha de nacimiento</label><input id="mEditS11BirthDate" type="date" class="input" value="${escapeAttr(entry.birthDate || "")}" /></div>
     <div class="row"><label class="label">Tipo de sesión</label><input id="mEditS11SessionType" class="input" value="${escapeAttr(entry.sessionType || "")}" /></div>
     <div class="row"><label class="label">Modalidad</label><input id="mEditS11Modality" class="input" value="${escapeAttr(entry.modality || "")}" /></div>
+    <div class="row"><label class="label">Notas</label><textarea id="mEditS11Notes" class="input" rows="3">${escapeHtml(entry.notes || "")}</textarea></div>
     <div class="row"><label class="label">Costo soles</label><input id="mEditS11Soles" type="number" class="input" min="0" step="0.01" value="${Number(entry.costSoles || 0)}" /></div>
     <div class="row"><label class="label">Costo dólares</label><input id="mEditS11Dol" type="number" class="input" min="0" step="0.01" value="${Number(entry.costDolares || 0)}" /></div>`,
     `<button class="btn" id="mCancel">Cancelar</button><button class="btn primary" id="mSave">Guardar cambios</button>`
@@ -2580,6 +2586,7 @@ function openOneToOneEditModal(entry){
     entry.birthDate = $("#mEditS11BirthDate").value || "";
     entry.sessionType = ($("#mEditS11SessionType").value || "").trim();
     entry.modality = ($("#mEditS11Modality").value || "").trim();
+    entry.notes = ($("#mEditS11Notes").value || "").trim();
     entry.costSoles = amountNum($("#mEditS11Soles").value);
     entry.costDolares = amountNum($("#mEditS11Dol").value);
     saveState();
