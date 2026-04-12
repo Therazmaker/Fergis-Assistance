@@ -540,16 +540,21 @@ async function recoverStateFromIDB(){
   const snapshot = normalizeState_(row.snapshot);
   const currentUpdated = Number(STATE.updatedAtMs || 0);
   const backupUpdated = Number(snapshot.updatedAtMs || 0);
+  const currentHasData = stateHasUserContent_(STATE);
+  const backupHasData = stateHasUserContent_(snapshot);
+  const shouldForceRecover = !currentHasData && backupHasData;
   // Use strict less-than: when timestamps are equal, prefer IDB (which holds the full
   // state including invoice images stripped from the compact localStorage version).
-  if(backupUpdated < currentUpdated) return;
+  if(!shouldForceRecover && backupUpdated < currentUpdated) return;
 
   const isNewer = backupUpdated > currentUpdated;
   STATE = snapshot;
   // Save compact version back to localStorage (avoid re-introducing quota issues).
   safeLocalStorageSetItem(LS_KEY, JSON.stringify(stripLargeDataForSync_(snapshot)), "State restore");
   render();
-  if(isNewer) toast("Recuperé una copia guardada localmente 💾");
+  if(isNewer || shouldForceRecover){
+    toast("Recuperé una copia guardada localmente 💾");
+  }
 }
 
 async function saveSyncMetaToIDB(){
@@ -706,6 +711,37 @@ function markActiveTabLocalUpdated_(){
   if(!STATE || typeof STATE !== "object") return;
   const tabId = getTabIdFromActiveTab(STATE.activeTab);
   markTabLocalUpdated_(tabId);
+}
+
+function stateHasUserContent_(st){
+  if(!st || typeof st !== "object") return false;
+  const hasEntries = (arr)=> Array.isArray(arr) && arr.length > 0;
+  if(
+    hasEntries(st.tasks) ||
+    hasEntries(st.sessions) ||
+    hasEntries(st.bookings) ||
+    hasEntries(st.reminders) ||
+    hasEntries(st.clients) ||
+    hasEntries(st.nextSteps) ||
+    hasEntries(st.ideas) ||
+    hasEntries(st.eventQueue) ||
+    hasEntries(st?.subscriptions?.entries) ||
+    hasEntries(st?.oneToOneSessions?.entries) ||
+    hasEntries(st?.questionReadings?.entries)
+  ){
+    return true;
+  }
+  const days = st?.contentTodo?.days;
+  if(days && typeof days === "object"){
+    for(const day of Object.values(days)){
+      const sections = day?.sections;
+      if(!sections || typeof sections !== "object") continue;
+      for(const value of Object.values(sections)){
+        if(Array.isArray(value) && value.length > 0) return true;
+      }
+    }
+  }
+  return false;
 }
 
 // ---------- State normalization ----------
