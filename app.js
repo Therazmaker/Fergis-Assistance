@@ -516,7 +516,9 @@ async function saveStateSnapshotToIDB(snapshot){
   });
 }
 
-async function recoverStateFromIDB(){
+async function recoverStateFromIDB(opts = {}){
+  const force = !!opts.force;
+  const userInitiated = !!opts.userInitiated;
   const db = await openStateDB();
   if(!db) return;
 
@@ -535,7 +537,10 @@ async function recoverStateFromIDB(){
     }
   });
 
-  if(!row?.snapshot) return;
+  if(!row?.snapshot){
+    if(userInitiated) toast("No encontré respaldo local para recuperar.");
+    return;
+  }
 
   const snapshot = normalizeState_(row.snapshot);
   const currentUpdated = Number(STATE.updatedAtMs || 0);
@@ -545,14 +550,19 @@ async function recoverStateFromIDB(){
   const shouldForceRecover = !currentHasData && backupHasData;
   // Use strict less-than: when timestamps are equal, prefer IDB (which holds the full
   // state including invoice images stripped from the compact localStorage version).
-  if(!shouldForceRecover && backupUpdated < currentUpdated) return;
+  if(!force && !shouldForceRecover && backupUpdated < currentUpdated){
+    if(userInitiated){
+      toast("Tu estado actual es más reciente que el respaldo.");
+    }
+    return;
+  }
 
   const isNewer = backupUpdated > currentUpdated;
   STATE = snapshot;
   // Save compact version back to localStorage (avoid re-introducing quota issues).
   safeLocalStorageSetItem(LS_KEY, JSON.stringify(stripLargeDataForSync_(snapshot)), "State restore");
   render();
-  if(isNewer || shouldForceRecover){
+  if(force || isNewer || shouldForceRecover){
     toast("Recuperé una copia guardada localmente 💾");
   }
 }
@@ -5326,6 +5336,12 @@ function openSettings(){
         <div class="itemMeta">Restaura estado y ajustes locales. Sobrescribe lo actual.</div>
       </div>
 
+      <div class="row">
+        <label class="label">Recuperar desde respaldo local (IndexedDB)</label>
+        <button class="btn" id="btnRecoverLocal">♻️ Forzar lectura de respaldo</button>
+        <div class="itemMeta">Úsalo si notas que faltan clientes o datos en pantalla.</div>
+      </div>
+
       <div class="divider"></div>
       <div class="itemMeta">Tip: GitHub Pages funciona perfecto porque todo es estático y el estado vive en local.</div>
     `,
@@ -5407,6 +5423,11 @@ function openSettings(){
     a.download = `fergis_assistant_backup_${todayKey()}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  $("#btnRecoverLocal").onclick = async () => {
+    await recoverStateFromIDB({ force: true, userInitiated: true });
+    render();
   };
 
   $("#fileImport").onchange = async (e) => {
