@@ -235,6 +235,22 @@ function parseInputDateTimeLocal(val){
 
 const HOME_TIMEZONE = "America/Lima";
 const HOME_TIMEZONE_LABEL = "Perú";
+
+const COMMON_TIMEZONES = [
+  { value: "America/Lima", label: "(GMT-5) Perú, Colombia, Ecuador" },
+  { value: "America/Mexico_City", label: "(GMT-6) México (Centro)" },
+  { value: "America/Argentina/Buenos_Aires", label: "(GMT-3) Argentina, Uruguay" },
+  { value: "America/Santiago", label: "(GMT-4/3) Chile" },
+  { value: "America/Caracas", label: "(GMT-4) Venezuela" },
+  { value: "America/La_Paz", label: "(GMT-4) Bolivia" },
+  { value: "America/Asuncion", label: "(GMT-4/3) Paraguay" },
+  { value: "America/New_York", label: "(GMT-5) USA (East)" },
+  { value: "America/Los_Angeles", label: "(GMT-8) USA (West)" },
+  { value: "Europe/Madrid", label: "(GMT+1/2) España" },
+  { value: "Europe/Paris", label: "(GMT+1/2) Francia, Italia, Alemania" },
+  { value: "Europe/London", label: "(GMT+0/1) UK, Portugal" }
+];
+
 const RESIDENCE_TIMEZONE_HINTS = [
   { tz: "America/Lima", keys: ["peru","perú","lima","cusco","arequipa","trujillo","piura"] },
   { tz: "Europe/Paris", keys: ["francia","france","paris","lyon","marseille","toulouse"] },
@@ -852,6 +868,7 @@ function normalizeState_(st){
     if(!c.birthTime) c.birthTime = c.birthTime || "";
     if(!c.birthPlace) c.birthPlace = c.birthPlace || "";
     if(!c.residencePlace) c.residencePlace = c.residencePlace || "";
+    if(!c.timezone) c.timezone = c.timezone || "";
     if(!c.phone) c.phone = c.phone || "";
     if(!c.zodiac) c.zodiac = c.zodiac || "";   // opcional (si no, se puede calcular)
     c.paidSolesManual = amountNum(c.paidSolesManual);
@@ -4416,6 +4433,14 @@ function openClientModal(clientId=null){
         <input id="mCBirthPlace" class="input" value="${escapeHtml(c?.birthPlace||"")}" placeholder="Ej: Lima, Perú" />
       </div>
       <div class="row">
+        <label class="label">Zona horaria</label>
+        <select id="mCTimezone" class="input">
+          <option value="">(seleccionar o inferir)</option>
+          ${COMMON_TIMEZONES.map(tz => `<option value="${tz.value}" ${c?.timezone === tz.value ? "selected" : ""}>${tz.label}</option>`).join("")}
+        </select>
+        <div class="itemMeta">Si se deja vacío, se intentará inferir del lugar de residencia.</div>
+      </div>
+      <div class="row">
         <label class="label">Lugar de residencia</label>
         <input id="mCResidencePlace" class="input" value="${escapeHtml(c?.residencePlace||"")}" placeholder="Ej: Cusco, Perú" />
       </div>
@@ -4466,6 +4491,7 @@ function openClientModal(clientId=null){
       birthTime: $("#mCBirthTime").value,
       birthPlace: $("#mCBirthPlace").value,
       residencePlace: $("#mCResidencePlace").value,
+      timezone: $("#mCTimezone").value,
       phone: $("#mCPhone").value,
       zodiac: $("#mCZodiac").value,
       paidSolesManual: amountNum($("#mCPaidSolesManual")?.value),
@@ -5025,7 +5051,7 @@ function openBookingModal(bookingId=null, opts={}){
   const getCurrentClientTz = ()=>{
     const selectedId = b?.clientId || prefClientId || "";
     const c = STATE.clients.find(x => String(x.id) === String(selectedId));
-    return inferTimezoneFromResidence(c?.residencePlace || "");
+    return c?.timezone || inferTimezoneFromResidence(c?.residencePlace || "");
   };
   const initialClientTz = getCurrentClientTz();
   const defaultStartHome = utcIsoToZoneInput(defaultStart, HOME_TIMEZONE);
@@ -5072,7 +5098,13 @@ function openBookingModal(bookingId=null, opts={}){
       <div class="row">
         <label class="label">Fecha y hora (cliente)</label>
         <input id="mBStartClient" type="datetime-local" class="input" value="${defaultStartClient}" />
-        <div id="mBClientTzMeta" class="itemMeta">Zona cliente: ${initialClientTz} (según residencia).</div>
+        <div class="row" style="margin-top:4px">
+          <label class="label">Zona horaria (cliente)</label>
+          <select id="mBClientTz" class="input small">
+            ${COMMON_TIMEZONES.map(tz => `<option value="${tz.value}" ${initialClientTz === tz.value ? "selected" : ""}>${tz.label}</option>`).join("")}
+          </select>
+        </div>
+        <div id="mBClientTzMeta" class="itemMeta">Zona detectada: ${initialClientTz}.</div>
       </div>
 
       <div class="row">
@@ -5160,9 +5192,7 @@ function openBookingModal(bookingId=null, opts={}){
   let syncingTz = false;
 
   function selectedClientTimezone_(){
-    const id = sel.value || "";
-    const c = STATE.clients.find(x=>String(x.id)===String(id));
-    return inferTimezoneFromResidence(c?.residencePlace || "");
+    return $("#mBClientTz").value || HOME_TIMEZONE;
   }
 
   function syncClientFromHome_(){
@@ -5186,8 +5216,11 @@ function openBookingModal(bookingId=null, opts={}){
   }
 
   function refreshClientTimezoneMeta_(){
-    const tz = selectedClientTimezone_();
-    clientTzMeta.textContent = `Zona cliente: ${tz} (según residencia).`;
+    const id = sel.value || "";
+    const c = STATE.clients.find(x=>String(x.id)===String(id));
+    const tz = c?.timezone || inferTimezoneFromResidence(c?.residencePlace || "");
+    $("#mBClientTz").value = tz;
+    clientTzMeta.textContent = `Zona detectada: ${tz}.`;
   }
 
   function applyClientSelection_(){
@@ -5206,6 +5239,10 @@ function openBookingModal(bookingId=null, opts={}){
     syncClientFromHome_();
   }
   sel.addEventListener("change", applyClientSelection_);
+  $("#mBClientTz").addEventListener("change", () => {
+    syncClientFromHome_();
+    clientTzMeta.textContent = `Zona (manual): ${$("#mBClientTz").value}.`;
+  });
   homeInput.addEventListener("input", syncClientFromHome_);
   clientInput.addEventListener("input", syncHomeFromClient_);
   // initial
