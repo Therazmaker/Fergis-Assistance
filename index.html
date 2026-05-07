@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="theme-color" content="#F4C430" />
-  <title>Fergis Assistant 🌻</title>
+  <meta name="theme-color" content="#F5C842" />
+  <title>Mamá Girasol CRM 🌻</title>
   <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./assets/favicon.png" sizes="32x32" />
   <link rel="apple-touch-icon" href="./assets/icon-192.png" />
@@ -18,211 +18,136 @@
       <div class="brand">
         <div class="orb"></div>
         <div class="brandText">
-          <div class="title">Fergis Assistant</div>
-          <div class="subtitle" id="subtitle">Local-first • Sync a Sheets (cuando lo activemos)</div>
+          <div class="title">Mamá Girasol CRM</div>
+          <div class="subtitle" id="subtitle">Gestión de clientas y finanzas</div>
         </div>
       </div>
       <div class="topActions">
-        <button class="btn ghost" id="btnSync" title="Sincronizar pestaña actual">⇡ Sync actual</button>
-        <button class="btn ghost" id="btnSheetPull" title="Traer pestaña actual desde Google Sheets">⇣ Traer actual</button>
-        <button class="btn ghost" id="btnSyncAll" title="Sincronizar todas las pestañas">⇡ Sync todo</button>
-        <button class="btn ghost" id="btnSheetPullAll" title="Traer todas las pestañas desde Google Sheets">⇣ Traer todo</button>
-        <button class="btn ghost" id="btnSettings" title="Ajustes">⚙</button>
+        <button class="btn ghost" id="btnSettings" title="Ajustes">⚙ Ajustes</button>
       </div>
     </header>
 
     <main class="main">
       <section class="card heroCard" id="heroCard">
-        <!-- Background image layers (shown when image is set) -->
         <div class="heroBgImage hidden" id="heroBgImage"></div>
         <div class="heroBgOverlay hidden" id="heroBgOverlay"></div>
 
         <div class="heroLeft">
-          <div class="heroKicker">HOY</div>
-          <h1 class="heroTitle" id="heroTitle" contenteditable="true" spellcheck="false" title="Haz clic para editar">Estructura suave,<br><em class="gold">sin culpa.</em></h1>
-          <div class="heroText" id="heroText" contenteditable="true" spellcheck="false" title="Haz clic para editar">
-            Aquí solo sumas pasos pequeños. Si te pausan los síntomas, lo registramos como dato, no como fallo.
+          <div class="heroKicker">MAYO 2026</div>
+          <h1 class="heroTitle" id="heroTitle" contenteditable="true">Estructura suave,<br><em class="gold">sin culpa.</em></h1>
+          <div class="heroText" id="heroText" contenteditable="true">
+            Acompañando el ciclo de vida de cada mujer que confía en tu guía.
           </div>
         </div>
-        <div class="heroRight" id="heroLevelDisplay">
-          <!-- Level display rendered by JS -->
-        </div>
+        <div class="heroRight" id="heroLevelDisplay"></div>
 
-        <!-- Image picker anchored to bottom of hero -->
-        <div class="heroImageArea" id="heroImageArea">
+        <div class="heroImageArea">
           <input type="file" id="heroImageInput" accept="image/*" style="display:none" />
-          <div class="heroImagePlaceholder" id="heroImagePlaceholder" onclick="document.getElementById('heroImageInput').click()">
-            <div class="heroImageIcon">🌸</div>
+          <div class="heroImagePlaceholder" id="heroImagePlaceholder">
+            <div class="heroImageIcon">🌻</div>
             <div class="heroImageHint">Imagen de fondo</div>
           </div>
-          <img id="heroImagePreview" class="heroImagePreview hidden" alt="" />
-          <button class="heroImageRemove hidden" id="heroImageRemove">🗑 Quitar imagen</button>
         </div>
       </section>
 
       <section class="tabsNav" id="tabsNav">
-        <button class="tabBtn active" data-tab="plan">Plan Girasol</button>
-        <button class="tabBtn" data-tab="contenido">Contenido de hoy</button>
-        <button class="tabBtn" data-tab="investigacion">Ideas / Investigación</button>
-        <button class="tabBtn" data-tab="clientes">Clientes y calendario</button>
-        <button class="tabBtn" data-tab="sesiones11">Sesiones 1:1</button>
-        <button class="tabBtn" data-tab="suscripcion">Suscripción - Diosa en Guía</button>
-        <button class="tabBtn" data-tab="lecturasPreguntas">Lecturas por preguntas</button>
+        <button class="tabBtn active" data-tab="prospeccion">Prospección</button>
+        <button class="tabBtn" data-tab="clientes">Clientes</button>
+        <button class="tabBtn" data-tab="calendario">Calendario</button>
         <button class="tabBtn" data-tab="finanzas">Finanzas</button>
         <button class="tabBtn" data-tab="archivo">Archivo</button>
       </section>
 
-      <section class="grid tabPanel active" data-panel="plan">
+      <!-- Panel Prospección -->
+      <section class="grid tabPanel active" data-panel="prospeccion">
         <section class="card fullSpan">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Plan Girasol</div>
-              <div class="cardSub">Espacio en blanco para que armes tu rutina de redes y ventas a tu manera.</div>
+              <div class="cardTitle">Pipeline de Prospección</div>
+              <div class="cardSub">Identifica y acompaña a tus futuras diosas.</div>
             </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn" id="btnAddPlanTask" title="Agregar tarea al plan">+ Tarea</button>
-            </div>
+            <button class="btn primary" id="btnAddProspect">+ Nuevo Prospecto</button>
           </div>
-          <div class="itemMeta" style="margin:-4px 0 10px">
-            🌻 Objetivo: presencia diaria → contenido 3x/semana → CTA → seguimiento.
+          <div class="filters">
+            <select id="prospectFilter" class="input small">
+              <option value="all">Todos los estados</option>
+              <option value="Investigando">Investigando</option>
+              <option value="Lead">Lead</option>
+              <option value="Conversando">Conversando</option>
+              <option value="Exploratoria">Exploratoria</option>
+              <option value="Agendado">Agendado</option>
+              <option value="Pagó">Pagó</option>
+              <option value="No avanzó">No avanzó</option>
+            </select>
+            <input id="prospectSearch" class="input small" placeholder="Buscar por nombre o notas…" />
           </div>
-          <div id="planList" class="list"></div>
+          <div id="prospectsList" class="list"></div>
         </section>
 
-      </section>
-
-      <section class="grid tabPanel contenidoGrid" data-panel="contenido">
-        <section class="card">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Contenido de hoy</div>
-              <div class="cardSub">Checklist de publicaciones. Lo de ayer se archiva solo.</div>
-              <div class="contentDateLine" id="contentDateLabel">Hoy</div>
-            </div>
-            <div style="display:flex;gap:8px;align-items:center">
-              <button class="btn" id="btnPickContentDate" title="Cambiar fecha de contenido">📅</button>
-              <button class="btn" id="btnUseContentTemplate" title="Cargar plantilla rápida">Usar plantilla</button>
-              <button class="btn" id="btnAddContentItem">+ Agregar</button>
-            </div>
-          </div>
-          <div id="contentTodoList" class="list"></div>
-          <div class="divider"></div>
-          <div class="cardFootActions">
-            <div class="itemMeta" id="contentTodoSummary">0/0 completadas</div>
-            <button class="btn" id="btnArchiveContentDay">Archivar día</button>
-          </div>
-        </section>
-
-        <section class="card">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Recordatorios / Pendientes</div>
-              <div class="cardSub">Notas accionables: seguimiento, ideas sueltas, cosas por hacer.</div>
-            </div>
-            <button class="btn" id="btnAddReminder">+ Recordatorio</button>
-          </div>
-          <div id="remindersList" class="list"></div>
-        </section>
-      </section>
-
-      <section class="grid tabPanel" data-panel="investigacion">
         <section class="card fullSpan">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Ideas / Investigación</div>
-              <div class="cardSub">Captura rápido. Después lo conviertes en post/historia.</div>
+              <div class="cardTitle">🔔 Recordatorios y Recontactos</div>
+              <div class="cardSub">Alertas automáticas de seguimiento.</div>
             </div>
-            <button class="btn" id="btnAddIdea">+ Idea</button>
           </div>
-          <div id="ideasList" class="list"></div>
+          <div id="recontactRemindersList" class="list"></div>
         </section>
       </section>
 
-      <section class="grid tabPanel clientsGrid" data-panel="clientes">
-        <section class="card">
+      <!-- Panel Clientes -->
+      <section class="grid tabPanel" data-panel="clientes">
+        <section class="card fullSpan">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Clientes</div>
-              <div class="cardSub">Seguimiento simple: estado + próximo paso.</div>
+              <div class="cardTitle">Base de Clientas</div>
+              <div class="cardSub">Historial y servicios activos.</div>
             </div>
-            <button class="btn" id="btnAddClient">+ Cliente</button>
+            <button class="btn primary" id="btnAddClient">+ Nueva Clienta</button>
           </div>
           <div class="filters">
             <select id="clientFilter" class="input small">
-              <option value="all">Todos</option>
-              <option value="lead">Lead</option>
-              <option value="chat">Conversando</option>
-              <option value="booked">Agendado</option>
-              <option value="paid">Pagó</option>
-              <option value="delivered">Entregado</option>
-              <option value="followup">Seguimiento</option>
+              <option value="all">Todos los estados</option>
+              <option value="Activa">Activa</option>
+              <option value="En pausa">En pausa</option>
+              <option value="Seguimiento">Seguimiento</option>
+              <option value="Finalizada">Finalizada</option>
             </select>
-            <select id="clientZodiacFilter" class="input small">
-              <option value="all">Todos los signos</option>
-              <option value="Aries">Aries</option>
-              <option value="Tauro">Tauro</option>
-              <option value="Géminis">Géminis</option>
-              <option value="Cáncer">Cáncer</option>
-              <option value="Leo">Leo</option>
-              <option value="Virgo">Virgo</option>
-              <option value="Libra">Libra</option>
-              <option value="Escorpio">Escorpio</option>
-              <option value="Sagitario">Sagitario</option>
-              <option value="Capricornio">Capricornio</option>
-              <option value="Acuario">Acuario</option>
-              <option value="Piscis">Piscis</option>
-            </select>
-            <input id="clientSearch" class="input small filterSearchRow" placeholder="Buscar…" />
+            <input id="clientSearch" class="input small" placeholder="Buscar clienta…" />
           </div>
-          <div id="clientsList" class="list clientsListWindow"></div>
+          <div id="clientsList" class="list"></div>
         </section>
+      </section>
 
-        <section class="card">
+      <!-- Panel Calendario -->
+      <section class="grid tabPanel" data-panel="calendario">
+        <section class="card fullSpan">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Próximos pasos</div>
-              <div class="cardSub">Selecciona cliente y registra lead, seguimiento u otras acciones.</div>
-            </div>
-            <button class="btn" id="btnAddNextStep">+ Paso</button>
-          </div>
-          <div class="filters">
-            <select id="nextStepClientFilter" class="input small"></select>
-            <input id="nextStepSearch" class="input small filterSearchRow" placeholder="Buscar cliente o paso…" />
-          </div>
-          <div id="nextStepsList" class="list nextStepsListWindow"></div>
-        </section>
-
-        <section class="card">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Calendario de sesiones</div>
-              <div class="cardSub">Programa con fecha y hora. Repeticiones semanales para suscripciones.</div>
+              <div class="cardTitle">Agenda de Sesiones</div>
+              <div class="cardSub">Vista mensual de acompañamientos.</div>
             </div>
             <div class="calHeadActions">
-              <button class="btn ghost" id="btnCalPrev" title="Mes anterior">◀</button>
-              <div class="pill" id="calMonthLabel">Mes</div>
-              <button class="btn ghost" id="btnCalNext" title="Mes siguiente">▶</button>
-              <button class="btn" id="btnAddBooking">+ Sesión</button>
+              <button class="btn ghost" id="btnCalPrev">◀</button>
+              <div class="pill" id="calMonthLabel">Mayo 2026</div>
+              <button class="btn ghost" id="btnCalNext">▶</button>
+              <button class="btn primary" id="btnAddBooking">+ Agendar Sesión</button>
             </div>
           </div>
           <div id="calendar" class="calendar"></div>
           <div class="divider"></div>
-          <div class="cardHead compact">
-            <div>
-              <div class="cardTitle">Próximas sesiones</div>
-              <div class="cardSub">Registro: tarot • astrología • suscripción</div>
-            </div>
-          </div>
-          <div id="bookingsList" class="list compactList bookingsListWindow"></div>
+          <div class="cardTitle">Próximas Sesiones</div>
+          <div id="bookingsList" class="list"></div>
         </section>
       </section>
 
+      <!-- Panel Finanzas -->
       <section class="grid tabPanel" data-panel="finanzas">
         <section class="card fullSpan">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Finanzas</div>
-              <div class="cardSub">Ingresos acumulados en soles y dólares por clientes.</div>
+              <div class="cardTitle">Control Financiero</div>
+              <div class="cardSub">Registro de ingresos y comprobantes.</div>
             </div>
             <div class="filters" id="financeRangeFilters">
               <button class="btn ghost active" data-range="1M">1M</button>
@@ -232,91 +157,37 @@
             </div>
           </div>
           <div class="financeTotals" id="financeTotals"></div>
-          <div id="financeChart" class="financeChart"></div>
+          <div id="financeChart" class="list"></div>
         </section>
       </section>
 
+      <!-- Panel Archivo -->
       <section class="grid tabPanel" data-panel="archivo">
         <section class="card fullSpan">
           <div class="cardHead">
             <div>
-              <div class="cardTitle">Archivo de sesiones</div>
-              <div class="cardSub">Aquí verás sesiones marcadas como hechas o canceladas.</div>
+              <div class="cardTitle">Archivo Histórico</div>
+              <div class="cardSub">Clientas finalizadas y prospectos que no avanzaron.</div>
             </div>
           </div>
           <div class="filters">
-            <select id="archiveTypeFilter" class="input small">
-              <option value="all">Todos los tipos</option>
-              <option value="tarot">Tarot</option>
-              <option value="astrologia">Astrología</option>
-              <option value="suscripcion">Suscripción</option>
+            <select id="archiveModuleFilter" class="input small">
+              <option value="all">Todo el archivo</option>
+              <option value="clientes">Clientas finalizadas</option>
+              <option value="prospectos">Prospectos no avanzados</option>
+              <option value="sesiones">Sesiones pasadas</option>
             </select>
-            <input id="archiveSearch" class="input small" placeholder="Filtrar por cliente o título…" />
+            <input id="archiveSearch" class="input small" placeholder="Filtrar archivo…" />
           </div>
-          <div id="archiveBookingsList" class="list"></div>
-        </section>
-      </section>
-
-      <section class="grid tabPanel" data-panel="suscripcion">
-        <section class="card fullSpan">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Suscripción - Diosa en Guía</div>
-              <div class="cardSub">Vista por año y mes, con seguimiento por tipo de suscripción.</div>
-            </div>
-            <button class="btn" id="btnAddSubscription">+ Registro</button>
-          </div>
-          <div class="subscriptionFilters">
-            <select id="subscriptionYear" class="input small"></select>
-            <select id="subscriptionMonth" class="input small"></select>
-          </div>
-          <div id="subscriptionBoards" class="subscriptionBoards"></div>
-        </section>
-      </section>
-
-      <section class="grid tabPanel" data-panel="sesiones11">
-        <section class="card fullSpan">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Sesiones 1:1</div>
-              <div class="cardSub">Registro mensual de sesiones individuales.</div>
-            </div>
-            <button class="btn" id="btnAddOneToOneSession">+ Sesión</button>
-          </div>
-          <div class="subscriptionFilters">
-            <select id="oneToOneYear" class="input small"></select>
-            <select id="oneToOneMonth" class="input small"></select>
-          </div>
-          <div id="oneToOneBoards" class="subscriptionBoards"></div>
-        </section>
-      </section>
-
-      <section class="grid tabPanel" data-panel="lecturasPreguntas">
-        <section class="card fullSpan">
-          <div class="cardHead">
-            <div>
-              <div class="cardTitle">Lecturas por preguntas</div>
-              <div class="cardSub">Registro mensual de lecturas por cantidad de preguntas.</div>
-            </div>
-            <button class="btn" id="btnAddQuestionReading">+ Lectura</button>
-          </div>
-          <div class="subscriptionFilters">
-            <select id="questionReadingsYear" class="input small"></select>
-            <select id="questionReadingsMonth" class="input small"></select>
-          </div>
-          <div id="questionReadingsBoard" class="subscriptionBoards"></div>
+          <div id="archiveList" class="list"></div>
         </section>
       </section>
     </main>
 
     <footer class="footer">
-      <div class="footLeft">v0.1 • Local-first</div>
-      <div class="footRight" id="syncStatus">Sync: desactivado</div>
-      <div class="watermark" aria-label="Créditos">Powered by Carlos Herraz "El Papá Girasol"</div>
+      <div class="footLeft">Mamá Girasol CRM v2.0</div>
+      <div class="footRight">fergismarrero.com</div>
     </footer>
-    <div class="watermark" aria-label="Créditos">
-      Powered by Carlos Herraz "El Papá Girasol"
-    </div>
   </div>
 
   <!-- Modal -->
