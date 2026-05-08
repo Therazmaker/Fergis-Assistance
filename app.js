@@ -37,12 +37,26 @@ const amountNum = (v) => {
 const pad2 = (n) => String(n).padStart(2,"0");
 
 // ---- State Management & Migration ----
-function loadState(){
-  let st = {};
+async function loadState(){
+  let st = null;
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if(raw) st = JSON.parse(raw);
-  } catch(e) { console.error("Error loading state", e); }
+    const db = await openDB();
+    const store = db.transaction("state", "readonly").objectStore("state");
+    st = await new Promise(r => {
+      const req = store.get("main");
+      req.onsuccess = () => r(req.result);
+      req.onerror = () => r(null);
+    });
+  } catch(e) { console.error("Error loading from IndexedDB", e); }
+
+  if(!st) {
+    console.log("No state in IndexedDB, checking localStorage...");
+    try {
+      const raw = localStorage.getItem(LS_KEY);
+      if(raw) st = JSON.parse(raw);
+    } catch(e) { console.error("Error loading from localStorage", e); }
+  }
+
   return normalizeState(st);
 }
 
@@ -50,7 +64,10 @@ function normalizeState(st){
   st = st || {};
 
   // Migration from v0.1 to v2.0
-  if(!st.v || st.v === "0.1") {
+  const savedV = localStorage.getItem(LS_KEY + "_v");
+  const currentV = st.v || savedV;
+
+  if(!currentV || currentV === "0.1") {
     console.log("Migrating state from v0.1 to v2.0");
     // Preserve clients if they exist in old structure
     if(st.clients && Array.isArray(st.clients)) {
@@ -109,18 +126,15 @@ function normalizeState(st){
   return st;
 }
 
-function saveState(){
+async function saveState(){
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+    const db = await openDB();
+    const tx = db.transaction("state", "readwrite");
+    tx.objectStore("state").put(STATE, "main");
+    // Still keep version in localStorage to help break loops if IDB is wiped
+    localStorage.setItem(LS_KEY + "_v", STATE.v || "2.0");
   } catch(e) {
-    console.error("Error saving state to localStorage:", e);
-    if(e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED") {
-      // If queue is huge, trim it and try again
-      if(STATE.eventQueue.length > 50) {
-        STATE.eventQueue = STATE.eventQueue.slice(-20);
-        try { localStorage.setItem(LS_KEY, JSON.stringify(STATE)); } catch(e2) {}
-      }
-    }
+    console.error("Error saving state to IndexedDB:", e);
   }
   if(SETTINGS.syncEnabled) syncSoon();
 }
@@ -136,21 +150,27 @@ function saveSettings(){ localStorage.setItem(SETTINGS_KEY, JSON.stringify(SETTI
 
 // ---- IndexedDB (Vouchers / Hero) ----
 function openDB(){
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
       if(!db.objectStoreNames.contains("assets")) db.createObjectStore("assets");
+      if(!db.objectStoreNames.contains("state")) db.createObjectStore("state");
     };
     req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
 }
 async function saveAsset(id, data){
   const db = await openDB();
-  return new Promise(r => {
+  return new Promise((resolve, reject) => {
     const tx = db.transaction("assets", "readwrite");
-    tx.objectStore("assets").put(data, id);
-    tx.oncomplete = () => r();
+    const store = tx.objectStore("assets");
+    try {
+      const req = store.put(data, id);
+      req.onsuccess = () => resolve();
+      req.onerror = () => reject(req.error);
+    } catch(e) { reject(e); }
   });
 }
 async function loadAsset(id){
@@ -797,13 +817,35 @@ function wire(){
     const file = imgInput.files[0];
     if(file){
       const reader = new FileReader();
-      reader.onload = async e => {
-        const src = e.target.result;
-        $("#heroBgImage").style.backgroundImage = `url(${src})`;
-        $("#heroBgImage").classList.remove("hidden");
-        $("#heroBgOverlay").classList.remove("hidden");
-        $("#heroCard").classList.add("has-bg-image");
-        await saveAsset("hero_img", src);
+      reader.onload = e => {
+        const img = new Image();
+        img.onload = async () => {
+          // Resize image to max 1920px width/height to save space
+          const canvas = document.createElement("canvas");
+          let w = img.width, h = img.height;
+          const max = 1920;
+          if(w > max || h > max){
+            if(w > h) { h *= max/w; w = max; }
+            else { w *= max/h; h = max; }
+          }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, w, h);
+          const src = canvas.toDataURL("image/jpeg", 0.75); // Compress as JPEG
+          
+          $("#heroBgImage").style.backgroundImage = `url(${src})`;
+          $("#heroBgImage").classList.remove("hidden");
+          $("#heroBgOverlay").classList.remove("hidden");
+          $("#heroCard").classList.add("has-bg-image");
+          try {
+            await saveAsset("hero_img", src);
+            toast("Imagen de fondo guardada. 🌻");
+          } catch(err) {
+            console.error("Error saving hero image", err);
+            toast("Error al guardar imagen (espacio insuficiente)");
+          }
+        };
+        img.src = e.target.result;
       };
       reader.readAsDataURL(file);
     }
@@ -814,15 +856,21 @@ function wire(){
 function toast(msg){ const el = document.createElement("div"); el.className = "toast"; el.textContent = msg; document.body.appendChild(el); setTimeout(()=>el.remove(), 2000); }
 
 // ---- Init ----
-STATE = loadState();
-SETTINGS = loadSettings();
-loadAsset("hero_img").then(src => {
-  if(src){
-    $("#heroBgImage").style.backgroundImage = `url(${src})`;
-    $("#heroBgImage").classList.remove("hidden");
-    $("#heroBgOverlay").classList.remove("hidden");
-    $("#heroCard").classList.add("has-bg-image");
-  }
-});
-wire();
-render();
+(async () => {
+  STATE = await loadState();
+  SETTINGS = loadSettings();
+  
+  // Try loading hero img
+  try {
+    const src = await loadAsset("hero_img");
+    if(src){
+      $("#heroBgImage").style.backgroundImage = `url(${src})`;
+      $("#heroBgImage").classList.remove("hidden");
+      $("#heroBgOverlay").classList.remove("hidden");
+      $("#heroCard").classList.add("has-bg-image");
+    }
+  } catch(e) {}
+
+  wire();
+  render();
+})();
