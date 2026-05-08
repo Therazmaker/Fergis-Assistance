@@ -8,7 +8,7 @@
 const LS_KEY = "fa_v01_state"; // Keeping original key for persistence
 const SETTINGS_KEY = "fa_v01_settings";
 const DB_NAME = "mama_girasol_db";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 const PROSPECT_PIPELINE = ["Investigando", "Lead", "Conversando", "Exploratoria", "Agendado", "Pagó", "No avanzó"];
 const PROSPECT_ORIGINS = ["Instagram — orgánico", "TikTok — orgánico", "Pinterest", "Web — formulario", "Referido por clienta", "Comunidad Entre Diosas", "Lead magnet", "Otro"];
