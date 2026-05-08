@@ -253,8 +253,18 @@ function render(){
 }
 
 function renderTabs(){
-  $$(".tabBtn").forEach(b => b.classList.toggle("active", b.dataset.tab === STATE.activeTab));
-  $$(".tabPanel").forEach(p => p.classList.toggle("active", p.dataset.panel === STATE.activeTab));
+  const activeTab = STATE.activeTab;
+  $$(".tabBtn").forEach(b => {
+    const isActive = b.dataset.tab === activeTab;
+    b.classList.toggle("active", isActive);
+  });
+  $$(".tabPanel").forEach(p => {
+    const isActive = p.dataset.panel === activeTab;
+    p.classList.toggle("active", isActive);
+    // Use the global .hidden class for more robust hiding
+    if(isActive) p.classList.remove("hidden");
+    else p.classList.add("hidden");
+  });
 }
 
 function renderProspects(){
