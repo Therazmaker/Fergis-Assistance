@@ -110,7 +110,18 @@ function normalizeState(st){
 }
 
 function saveState(){
-  localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  try {
+    localStorage.setItem(LS_KEY, JSON.stringify(STATE));
+  } catch(e) {
+    console.error("Error saving state to localStorage:", e);
+    if(e.name === "QuotaExceededError" || e.name === "NS_ERROR_DOM_QUOTA_REACHED") {
+      // If queue is huge, trim it and try again
+      if(STATE.eventQueue.length > 50) {
+        STATE.eventQueue = STATE.eventQueue.slice(-20);
+        try { localStorage.setItem(LS_KEY, JSON.stringify(STATE)); } catch(e2) {}
+      }
+    }
+  }
   if(SETTINGS.syncEnabled) syncSoon();
 }
 
@@ -183,6 +194,8 @@ async function performSync(){
 function pushEvent(type, payload){
   const evt = { id: uid("evt"), type, payload, ts: nowISO() };
   STATE.eventQueue.push(evt);
+  // Cap the queue to 200 events to prevent localStorage bloat if sync is off/broken
+  if(STATE.eventQueue.length > 200) STATE.eventQueue.shift();
   saveState();
 }
 
