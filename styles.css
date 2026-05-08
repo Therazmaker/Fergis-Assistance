@@ -188,9 +188,9 @@ body {
 /* ══════════════════════════════════
    GRID / TAB PANELS
 ══════════════════════════════════ */
+.grid { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .tabPanel { display: none; }
 .tabPanel.active { display: grid; }
-.grid { margin-top: 16px; display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .fullSpan { grid-column: 1 / -1; }
 
 /* ══════════════════════════════════
